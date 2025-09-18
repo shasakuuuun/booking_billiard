@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Admin - Smart Billiard Control</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .stats-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            border: 2px solid #e2e8f0;
+        }
+
+        .stat-card h3 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .lampu-status {
+            font-size: 2.5em;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .lampu-on {
+            color: #48bb78;
+        }
+
+        .lampu-off {
+            color: #f56565;
+        }
+
+        .booking-count {
+            font-size: 3em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .manual-control {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .btn-control {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 150px;
+        }
+
+        .btn-on {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .btn-off {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+        }
+
+        .btn-control:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-back {
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .btn-back:hover {
+            transform: translateY(-2px);
+        }
+
+        .system-info {
+            background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+        }
+
+        .system-info h3 {
+            color: #2c5282;
+            margin-bottom: 15px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .info-item {
+            background: rgba(255, 255, 255, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .info-value {
+            color: #4a5568;
+            margin-top: 5px;
+        }
+
+        .booking-item {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+            border-left: 5px solid #667eea;
+        }
+
+        .booking-item.active {
+            border-left-color: #48bb78;
+            background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
+        }
+
+        .booking-item.completed {
+            border-left-color: #a0aec0;
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            .control-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn-control {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔧 Admin Dashboard</h1>
+            <a href="index.html" class="btn-back">← Kembali ke Booking</a>
+        </header>
+
+        <div class="stats-section">
+            <div class="stat-card">
+                <h3>💡 Status Lampu</h3>
+                <div id="adminLampuStatus" class="lampu-status lampu-off">⚫ OFF</div>
+                <div id="lastUpdate" style="font-size: 0.9em; color: #4a5568;">
+                    Last update: <span id="updateTime">--:--</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <h3>📅 Booking Hari Ini</h3>
+                <div id="totalBooking" class="booking-count">0</div>
+                <div style="color: #4a5568;">Total reservasi</div>
+            </div>
+
+            <div class="stat-card">
+                <h3>🕐 Booking Aktif</h3>
+                <div id="activeBooking" class="booking-count" style="color: #48bb78;">0</div>
+                <div style="color: #4a5568;">Sedang bermain</div>
+            </div>
+        </div>
+
+        <div class="system-info">
+            <h3>ℹ️ System Information</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Current Time</div>
+                    <div class="info-value" id="systemTime">--:--:--</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Server Status</div>
+                    <div class="info-value" id="serverStatus">🟢 Online</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Auto Check</div>
+                    <div class="info-value">Every 60 seconds</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Database</div>
+                    <div class="info-value">billiard_booking</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="manual-control">
+            <h2>🎛️ Manual Control</h2>
+            <p style="color: #4a5568; margin-bottom: 20px; text-align: center;">
+                Kontrol manual akan override sistem otomatis sementara
+            </p>
+            <div class="control-buttons">
+                <button id="manualOn" class="btn-control btn-on">🔴 Nyalakan Lampu</button>
+                <button id="manualOff" class="btn-control btn-off">⚫ Matikan Lampu</button>
+                <button id="refreshData" class="btn-control" style="background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%); color: white;">🔄 Refresh Data</button>
+            </div>
+        </div>
+
+        <div class="booking-section">
+            <h2>📋 All Bookings Today</h2>
+            <div id="adminBookingList">
+                <div class="loading">Loading bookings...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Admin-specific JavaScript
+        let bookings = [];
+        let lampuStatus = false;
+
+        // Initialize admin panel
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔧 Admin panel loaded');
+            
+            loadAdminData();
+            updateSystemTime();
+            
+            // Event listeners
+            document.getElementById('manualOn').addEventListener('click', () => controlLampu('ON'));
+            document.getElementById('manualOff').addEventListener('click', () => controlLampu('OFF'));
+            document.getElementById('refreshData').addEventListener('click', loadAdminData);
+
+            // Auto refresh every 30 seconds
+            setInterval(loadAdminData, 30000);
+            setInterval(updateSystemTime, 1000);
+        });
+
+        // Load all admin data
+        async function loadAdminData() {
+            await Promise.all([
+                loadBookings(),
+                updateLampuStatus()
+            ]);
+            updateStats();
+        }
+
+        // Load bookings
+        async function loadBookings() {
+            try {
+                const response = await fetch('/api/bookings');
+                if (!response.ok) throw new Error('Failed to load bookings');
+                
+                bookings = await response.json();
+                displayAdminBookings();
+                
+            } catch (error) {
+                console.error('Error loading bookings:', error);
+                showAlert('Error loading bookings: ' + error.message, 'error');
+            }
+        }
+
+        // Update lampu status
+        async function updateLampuStatus() {
+            try {
+                const response = await fetch('/api/lampu/status');
+                if (!response.ok) throw new Error('Failed to load lamp status');
+                
+                const lampuData = await response.json();
+                
+                if (lampuData.length > 0) {
+                    lampuStatus = lampuData[0].status_lampu;
+                    
+                    const statusEl = document.getElementById('adminLampuStatus');
+                    const updateTimeEl = document.getElementById('updateTime');
+                    
+                    if (lampuStatus) {
+                        statusEl.textContent = '🔴 ON';
+                        statusEl.className = 'lampu-status lampu-on';
+                    } else {
+                        statusEl.textContent = '⚫ OFF';
+                        statusEl.className = 'lampu-status lampu-off';
+                    }
+                    
+                    updateTimeEl.textContent = new Date().toLocaleTimeString();
+                }
+                
+            } catch (error) {
+                console.error('Error updating lamp status:', error);
+                document.getElementById('serverStatus').innerHTML = '🔴 Connection Error';
+            }
+        }
+
+        // Display admin bookings
+        function displayAdminBookings() {
+            const listEl = document.getElementById('adminBookingList');
+            
+            if (bookings.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-state">
+                        <h3>📭 No bookings today</h3>
+                        <p>All quiet on the billiard front!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const currentTime = new Date().toTimeString().slice(0, 5);
+            
+            listEl.innerHTML = bookings.map(booking => {
+                const isActive = booking.status === 'active' || 
+                                (booking.jam_mulai <= currentTime && booking.jam_selesai > currentTime);
+                const isCompleted = booking.status === 'completed' || booking.jam_selesai <= currentTime;
+                
+                let itemClass = 'booking-item';
+                let statusBadge = '<span style="color: #4a5568;">⏱️ Pending</span>';
+                
+                if (isCompleted) {
+                    itemClass += ' completed';
+                    statusBadge = '<span style="color: #4a5568;">✅ Completed</span>';
+                } else if (isActive) {
+                    itemClass += ' active';
+                    statusBadge = '<span style="color: #22543d;">🔴 Active</span>';
+                }
+                
+                return `
+                    <div class="${itemClass}">
+                        <div style="display: flex; justify-content: between; align-items: center; flex-wrap: wrap;">
+                            <div style="flex: 1;">
+                                <h4 style="margin-bottom: 10px;">👤 ${booking.nama}</h4>
+                                <p>⏰ ${formatTime(booking.jam_mulai)} - ${formatTime(booking.jam_selesai)}</p>
+                                <p>⏱️ Duration: ${booking.durasi} hours</p>
+                                <p>📅 ${formatDate(booking.tanggal)}</p>
+                            </div>
+                            <div style="text-align: right; font-weight: bold; font-size: 1.1em;">
+                                ${statusBadge}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update statistics
+        function updateStats() {
+            const totalEl = document.getElementById('totalBooking');
+            const activeEl = document.getElementById('activeBooking');
+            
+            if (totalEl) totalEl.textContent = bookings.length;
+            
+            const currentTime = new Date().toTimeString().slice(0, 5);
+            const activeBookings = bookings.filter(booking => 
+                booking.status === 'active' || 
+                (booking.jam_mulai <= currentTime && booking.jam_selesai > currentTime)
+            );
+            
+            if (activeEl) activeEl.textContent = activeBookings.length;
+        }
+
+        // Manual control
+        async function controlLampu(action) {
+            try {
+                showAlert(`⏳ Sending ${action} command...`, 'info');
+                
+                const response = await fetch('/api/lampu/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert(`✅ ${result.message}`, 'success');
+                    setTimeout(updateLampuStatus, 1000);
+                } else {
+                    showAlert(`❌ ${result.error}`, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Control error:', error);
+                showAlert('❌ Failed to control lamp', 'error');
+            }
+        }
+
+        // Update system time
+        function updateSystemTime() {
+            const timeEl = document.getElementById('systemTime');
+            if (timeEl) {
+                timeEl.textContent = new Date().toLocaleTimeString();
+            }
+        }
+
+        // Show alert (reuse from main script)
+        function showAlert(message, type = 'info') {
+            const existingAlert = document.querySelector('.alert');
+            if (existingAlert) existingAlert.remove();
+
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+
+            const container = document.querySelector('.container');
+            const header = container.querySelector('header');
+            container.insertBefore(alert, header.nextSibling);
+
+            setTimeout(() => {
+                if (alert.parentNode) alert.remove();
+            }, 5000);
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Utility functions
+        function formatTime(timeString) {
+            if (!timeString) return '--:--';
+            const [hours, minutes] = timeString.split(':');
+            return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '--';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+    </script>
+</body>
+</html>

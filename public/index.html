@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎱 Smart Billiard Booking</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎱 Smart Billiard Booking</h1>
+            <div class="status-indicator">
+                <span id="lampuStatus">⚫ Lampu: OFF</span>
+            </div>
+        </header>
+
+        <div class="booking-section">
+            <h2>📅 Form Booking</h2>
+            <form id="bookingForm">
+                <div class="form-group">
+                    <label for="nama">👤 Nama Customer:</label>
+                    <input type="text" id="nama" name="nama" required placeholder="Masukkan nama Anda">
+                </div>
+
+                <div class="form-group">
+                    <label for="jamMulai">⏰ Jam Mulai:</label>
+                    <input type="time" id="jamMulai" name="jamMulai" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="durasi">⏱️ Durasi Main:</label>
+                    <select id="durasi" name="durasi" required>
+                        <option value="">Pilih durasi...</option>
+                        <option value="1">1 Jam</option>
+                        <option value="2">2 Jam</option>
+                        <option value="3">3 Jam</option>
+                        <option value="4">4 Jam</option>
+                        <option value="5">5 Jam</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-submit">🎯 Book Sekarang!</button>
+            </form>
+        </div>
+
+        <div class="schedule-section">
+            <h2>📋 Jadwal Booking Hari Ini</h2>
+            <div class="current-time">
+                Waktu Sekarang: <span id="currentTime">--:--</span>
+            </div>
+            <div id="scheduleList">
+                <div class="loading">Loading jadwal...</div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3>ℹ️ Cara Kerja Sistem:</h3>
+            <ul>
+                <li>🔴 Lampu akan <strong>otomatis NYALA</strong> sesuai jam booking</li>
+                <li>⚫ Lampu akan <strong>otomatis MATI</strong> setelah waktu habis</li>
+                <li>⏰ Sistem cek booking setiap menit</li>
+                <li>📱 Real-time monitoring status lampu</li>
+            </ul>
+        </div>
+
+        <div class="admin-link">
+            <a href="admin.html" class="btn-admin">🔧 Admin Panel</a>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
