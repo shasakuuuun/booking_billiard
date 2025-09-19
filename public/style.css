@@ -6,7 +6,8 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: url('billl.jpg') no-repeat center center fixed;
+    background-size: cover;
     min-height: 100vh;
     color: #333;
     line-height: 1.6;
@@ -20,7 +21,7 @@ body {
 
 /* Header Styles */
 header {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.65); /* putih transparan */
     padding: 25px;
     border-radius: 20px;
     margin-bottom: 25px;
@@ -28,7 +29,7 @@ header {
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(8px); /* efek blur di belakang */
 }
 
 header h1 {
@@ -57,12 +58,12 @@ header h1 {
 .booking-section, 
 .schedule-section, 
 .info-section {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.65); /* transparan */
     padding: 30px;
     border-radius: 20px;
     margin-bottom: 25px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(8px); /* biar elegan */
 }
 
 .booking-section h2,

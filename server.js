@@ -171,6 +171,106 @@ app.post('/api/lampu/control', (req, res) => {
     });
 });
 
+
+// Admin credentials (nanti bisa pindah ke database)
+const ADMIN_CREDENTIALS = {
+    username: 'admin',
+    password: 'billiard123'  // Ganti dengan password yang aman
+};
+
+// Session storage (simple in-memory, untuk production pakai proper session)
+let adminSessions = new Set();
+
+// Generate simple session token
+function generateSessionToken() {
+    return Math.random().toString(36).substr(2) + Date.now().toString(36);
+}
+
+// Login route
+app.post('/api/admin/login', (req, res) => {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username dan password harus diisi' });
+    }
+    
+    if (username === ADMIN_CREDENTIALS.username && 
+        password === ADMIN_CREDENTIALS.password) {
+        
+        const sessionToken = generateSessionToken();
+        adminSessions.add(sessionToken);
+        
+        console.log(`🔐 Admin login successful: ${username}`);
+        res.json({ 
+            message: 'Login berhasil',
+            token: sessionToken,
+            username: username
+        });
+    } else {
+        console.log(`❌ Failed login attempt: ${username}`);
+        res.status(401).json({ error: 'Username atau password salah' });
+    }
+});
+
+// Logout route
+app.post('/api/admin/logout', (req, res) => {
+    const { token } = req.body;
+    
+    if (token) {
+        adminSessions.delete(token);
+        console.log('🚪 Admin logged out');
+    }
+    
+    res.json({ message: 'Logout berhasil' });
+});
+
+// Verify admin session
+app.post('/api/admin/verify', (req, res) => {
+    const { token } = req.body;
+    
+    if (token && adminSessions.has(token)) {
+        res.json({ valid: true });
+    } else {
+        res.status(401).json({ valid: false, error: 'Session expired' });
+    }
+});
+
+// Protect admin routes (middleware)
+function requireAdmin(req, res, next) {
+    const token = req.headers['authorization'];
+    
+    if (!token || !adminSessions.has(token)) {
+        return res.status(401).json({ error: 'Unauthorized: Admin access required' });
+    }
+    
+    next();
+}
+
+// Protect manual control route
+app.post('/api/lampu/control', requireAdmin, (req, res) => {
+    const { action } = req.body;
+    
+    if (action !== 'ON' && action !== 'OFF') {
+        return res.status(400).json({ error: 'Action harus ON atau OFF' });
+    }
+    
+    const status = action === 'ON' ? 1 : 0;
+    const query = 'UPDATE meja_billiard SET status_lampu = ? WHERE id = 1';
+    
+    db.query(query, [status], (err, result) => {
+        if (err) {
+            console.error('Database error:', err);
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        console.log(`🔧 Manual control by admin: ${action}`);
+        sendCommandToESP(action);
+        res.json({ message: `Lampu berhasil di-${action}` });
+    });
+});
+
+
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📊 Database: ${process.env.DB_DATABASE}`);
