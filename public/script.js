@@ -60,7 +60,7 @@ function displaySchedule() {
         scheduleList.innerHTML = `
             <div class="empty-state">
                 <h3>📭 Belum ada booking hari ini</h3>
-                <p>Jadilah yang pertama booking billiard!</p>
+                <p>Jadilah yang pertama booking di Genzyeeeh billiard!</p>
             </div>
         `;
         return;

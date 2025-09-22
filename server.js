@@ -12,6 +12,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// Admin credentials
+const ADMIN_CREDENTIALS = {
+    username: 'admin',
+    password: 'billiard123'
+};
+
+// Session storage (simple in-memory)
+let adminSessions = new Set();
+
 // Database connection
 const db = mysql.createConnection({
     host: process.env.DB_HOST,
@@ -28,7 +37,35 @@ db.connect((err) => {
     console.log('✅ Connected to MySQL database');
 });
 
-// API Routes
+// Generate session token
+function generateSessionToken() {
+    return Math.random().toString(36).substr(2) + Date.now().toString(36);
+}
+
+// Protect admin routes middleware
+function requireAdmin(req, res, next) {
+    const token = req.headers['authorization'];
+    
+    if (!token || !adminSessions.has(token)) {
+        return res.status(401).json({ error: 'Unauthorized: Admin access required' });
+    }
+    
+    next();
+}
+
+// Function untuk kirim command ke ESP32
+function sendCommandToESP(command) {
+    console.log(`📡 Sending to ESP32: ${command}`);
+    
+    // Nanti akan diimplementasi untuk komunikasi dengan ESP32
+    // const axios = require('axios');
+    // axios.post('http://ESP32_IP/control', { action: command })
+    //   .catch(err => console.log('ESP32 connection error:', err.message));
+}
+
+// ==================== PUBLIC API ROUTES ====================
+
+// Get bookings
 app.get('/api/bookings', (req, res) => {
     const query = 'SELECT * FROM bookings WHERE tanggal = CURDATE() ORDER BY jam_mulai';
     db.query(query, (err, results) => {
@@ -41,6 +78,7 @@ app.get('/api/bookings', (req, res) => {
     });
 });
 
+// Create booking
 app.post('/api/booking', (req, res) => {
     const { nama, jam_mulai, durasi } = req.body;
     
@@ -74,6 +112,7 @@ app.post('/api/booking', (req, res) => {
     });
 });
 
+// Get lampu status
 app.get('/api/lampu/status', (req, res) => {
     const query = 'SELECT * FROM meja_billiard';
     db.query(query, (err, results) => {
@@ -85,6 +124,84 @@ app.get('/api/lampu/status', (req, res) => {
         res.json(results);
     });
 });
+
+// ==================== ADMIN AUTH ROUTES ====================
+
+// Admin login
+app.post('/api/admin/login', (req, res) => {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username dan password harus diisi' });
+    }
+    
+    if (username === ADMIN_CREDENTIALS.username && 
+        password === ADMIN_CREDENTIALS.password) {
+        
+        const sessionToken = generateSessionToken();
+        adminSessions.add(sessionToken);
+        
+        console.log(`🔐 Admin login successful: ${username}`);
+        res.json({ 
+            message: 'Login berhasil',
+            token: sessionToken,
+            username: username
+        });
+    } else {
+        console.log(`❌ Failed login attempt: ${username}`);
+        res.status(401).json({ error: 'Username atau password salah' });
+    }
+});
+
+// Admin logout
+app.post('/api/admin/logout', (req, res) => {
+    const { token } = req.body;
+    
+    if (token) {
+        adminSessions.delete(token);
+        console.log('🚪 Admin logged out');
+    }
+    
+    res.json({ message: 'Logout berhasil' });
+});
+
+// Verify admin session
+app.post('/api/admin/verify', (req, res) => {
+    const { token } = req.body;
+    
+    if (token && adminSessions.has(token)) {
+        res.json({ valid: true });
+    } else {
+        res.status(401).json({ valid: false, error: 'Session expired' });
+    }
+});
+
+// ==================== ADMIN PROTECTED ROUTES ====================
+
+// Manual control (protected)
+app.post('/api/lampu/control', requireAdmin, (req, res) => {
+    const { action } = req.body;
+    
+    if (action !== 'ON' && action !== 'OFF') {
+        return res.status(400).json({ error: 'Action harus ON atau OFF' });
+    }
+    
+    const status = action === 'ON' ? 1 : 0;
+    const query = 'UPDATE meja_billiard SET status_lampu = ? WHERE id = 1';
+    
+    db.query(query, [status], (err, result) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        console.log(`Manual control: ${action}`);
+        sendCommandToESP(action);
+        res.json({ message: `Lampu berhasil di-${action}` });
+    });
+});
+
+// ==================== CRON JOB ====================
 
 // Cron job untuk kontrol lampu otomatis (jalan setiap menit)
 cron.schedule('* * * * *', () => {
@@ -137,142 +254,11 @@ cron.schedule('* * * * *', () => {
     });
 });
 
-// Function untuk kirim command ke ESP32 (nanti akan diimplementasi)
-function sendCommandToESP(command) {
-    console.log(`📡 Sending to ESP32: ${command}`);
-    
-    // Nanti akan diimplementasi untuk komunikasi dengan ESP32
-    // const axios = require('axios');
-    // axios.post('http://ESP32_IP/control', { action: command })
-    //   .catch(err => console.log('ESP32 connection error:', err.message));
-}
-
-// Route untuk manual control (admin)
-app.post('/api/lampu/control', (req, res) => {
-    const { action } = req.body;
-    
-    if (action !== 'ON' && action !== 'OFF') {
-        return res.status(400).json({ error: 'Action harus ON atau OFF' });
-    }
-    
-    const status = action === 'ON' ? 1 : 0;
-    const query = 'UPDATE meja_billiard SET status_lampu = ? WHERE id = 1';
-    
-    db.query(query, [status], (err, result) => {
-        if (err) {
-            console.error('Database error:', err);
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        
-        console.log(`🔧 Manual control: ${action}`);
-        sendCommandToESP(action);
-        res.json({ message: `Lampu berhasil di-${action}` });
-    });
-});
-
-
-// Admin credentials (nanti bisa pindah ke database)
-const ADMIN_CREDENTIALS = {
-    username: 'admin',
-    password: 'billiard123'  // Ganti dengan password yang aman
-};
-
-// Session storage (simple in-memory, untuk production pakai proper session)
-let adminSessions = new Set();
-
-// Generate simple session token
-function generateSessionToken() {
-    return Math.random().toString(36).substr(2) + Date.now().toString(36);
-}
-
-// Login route
-app.post('/api/admin/login', (req, res) => {
-    const { username, password } = req.body;
-    
-    if (!username || !password) {
-        return res.status(400).json({ error: 'Username dan password harus diisi' });
-    }
-    
-    if (username === ADMIN_CREDENTIALS.username && 
-        password === ADMIN_CREDENTIALS.password) {
-        
-        const sessionToken = generateSessionToken();
-        adminSessions.add(sessionToken);
-        
-        console.log(`🔐 Admin login successful: ${username}`);
-        res.json({ 
-            message: 'Login berhasil',
-            token: sessionToken,
-            username: username
-        });
-    } else {
-        console.log(`❌ Failed login attempt: ${username}`);
-        res.status(401).json({ error: 'Username atau password salah' });
-    }
-});
-
-// Logout route
-app.post('/api/admin/logout', (req, res) => {
-    const { token } = req.body;
-    
-    if (token) {
-        adminSessions.delete(token);
-        console.log('🚪 Admin logged out');
-    }
-    
-    res.json({ message: 'Logout berhasil' });
-});
-
-// Verify admin session
-app.post('/api/admin/verify', (req, res) => {
-    const { token } = req.body;
-    
-    if (token && adminSessions.has(token)) {
-        res.json({ valid: true });
-    } else {
-        res.status(401).json({ valid: false, error: 'Session expired' });
-    }
-});
-
-// Protect admin routes (middleware)
-function requireAdmin(req, res, next) {
-    const token = req.headers['authorization'];
-    
-    if (!token || !adminSessions.has(token)) {
-        return res.status(401).json({ error: 'Unauthorized: Admin access required' });
-    }
-    
-    next();
-}
-
-// Protect manual control route
-app.post('/api/lampu/control', requireAdmin, (req, res) => {
-    const { action } = req.body;
-    
-    if (action !== 'ON' && action !== 'OFF') {
-        return res.status(400).json({ error: 'Action harus ON atau OFF' });
-    }
-    
-    const status = action === 'ON' ? 1 : 0;
-    const query = 'UPDATE meja_billiard SET status_lampu = ? WHERE id = 1';
-    
-    db.query(query, [status], (err, result) => {
-        if (err) {
-            console.error('Database error:', err);
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        
-        console.log(`🔧 Manual control by admin: ${action}`);
-        sendCommandToESP(action);
-        res.json({ message: `Lampu berhasil di-${action}` });
-    });
-});
-
+// ==================== SERVER START ====================
 
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📊 Database: ${process.env.DB_DATABASE}`);
     console.log(`⏰ Cron job: Checking every minute for automatic lighting`);
-}); 
+    console.log(`🔐 Admin credentials: username='admin', password='billiard123'`);
+});
