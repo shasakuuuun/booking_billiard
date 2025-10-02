@@ -2,7 +2,7 @@ const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const cron = require('node-cron');
-require('dotenv').config();
+require('dotenv').config(); 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
