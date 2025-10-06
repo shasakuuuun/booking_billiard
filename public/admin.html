@@ -670,20 +670,25 @@
             <div class="control-panel">
                 <h2 class="control-title">🎛️ Manual Control</h2>
                 <p style="color: #64748b; margin-bottom: 20px;">
-                    Manual control will override automatic system temporarily
+                    Manual control allows you to turn ON/OFF each table lamp manually
                 </p>
+
                 <div class="control-buttons">
-                    <button id="manualOn" class="btn btn-success">
-                        <span>🔴</span> Turn On Light
-                    </button>
-                    <button id="manualOff" class="btn btn-danger">
-                        <span>⚫</span> Turn Off Light
-                    </button>
-                    <button id="refreshData" class="btn btn-primary">
+                    <!-- Meja 1 -->
+                    <button class="btn btn-success" onclick="manualControl(1, 'ON')">🔴 Meja 1 ON</button>
+                    <button class="btn btn-danger" onclick="manualControl(1, 'OFF')">⚫ Meja 1 OFF</button>
+
+                    <!-- Meja 2 -->
+                    <button class="btn btn-success" onclick="manualControl(2, 'ON')">🔴 Meja 2 ON</button>
+                    <button class="btn btn-danger" onclick="manualControl(2, 'OFF')">⚫ Meja 2 OFF</button>
+
+                    <!-- Refresh -->
+                    <button id="refreshData" class="btn btn-primary" onclick="loadStatusMeja()">
                         <span>🔄</span> Refresh Data
                     </button>
                 </div>
             </div>
+
 
             <!-- System Info -->
             <div class="control-panel">
@@ -707,6 +712,18 @@
                 </div>
             </div>
             </div>
+            <!-- Status Meja Section -->
+            <div class="control-panel">
+                <h2 class="control-title">🎱 Status Meja</h2>
+                <p style="color: #64748b; margin-bottom: 20px;">
+                    Monitoring otomatis setiap 10 detik
+                </p>
+
+                <div id="statusMeja" class="status-container">
+                    <div class="loading">Memuat status meja...</div>
+                </div>
+            </div>
+
         </div>
 
         <!-- ================= SETTINGS ================= -->
@@ -1044,6 +1061,57 @@
             document.getElementById(id).style.display = 'block';
             event.target.closest('.nav-item').classList.add('active');
         }
+
+
+
+        // Jalankan setiap 10 detik
+        setInterval(loadStatusMeja, 10000);
+        loadStatusMeja();
+
+        async function loadStatusMeja() {
+            try {
+                const response = await fetch('http://localhost:3000/api/status-meja');
+                const data = await response.json();
+
+                const container = document.getElementById('statusMeja');
+                container.innerHTML = '';
+
+                data.forEach(meja => {
+                    const card = document.createElement('div');
+                    card.className = 'meja-card';
+
+                    const statusLampu = meja.status_lampu ? '🟢 Nyala' : '⚫ Mati';
+                    const statusBooking = meja.status_booking === 'active' ? 'Sedang Dipakai' : 'Kosong';
+
+                    card.innerHTML = `
+                        <h3>${meja.nama_meja}</h3>
+                        <p><b>Lampu:</b> ${statusLampu}</p>
+                        <p><b>Status:</b> ${statusBooking}</p>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Gagal ambil status meja:', error);
+            }
+        }
+        // Fungsi untuk kontrol manual tiap meja
+        async function manualControl(mejaId, action) {
+            try {
+                const response = await fetch(`http://localhost:3000/api/manual-control`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ meja_id: mejaId, action })
+                });
+
+                const result = await response.json();
+                alert(result.message);
+                loadStatusMeja(); // refresh status setelah diubah
+            } catch (error) {
+                console.error('Gagal kirim perintah manual:', error);
+                alert('Gagal mengirim perintah ke server!');
+            }
+        }
+
     </script>
 </body>
 </html>

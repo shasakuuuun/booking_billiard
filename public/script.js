@@ -149,7 +149,8 @@ async function handleBookingSubmit(e) {
     const bookingData = {
         nama: formData.get('nama').trim(),
         jam_mulai: formData.get('jamMulai'),
-        durasi: parseInt(formData.get('durasi'))
+        durasi: parseInt(formData.get('durasi')),
+        meja_id: parseInt(formData.get('meja'))
     };
 
     // Validasi input
@@ -316,6 +317,9 @@ function formatDate(dateString) {
     }
 }
 
+
+
+
 // Debug function - can be called from browser console
 window.debugBilliard = function() {
     console.log('🔍 Debug Info:');
@@ -323,3 +327,5 @@ window.debugBilliard = function() {
     console.log('Lampu Status:', lampuStatus);
     console.log('Current Time:', new Date().toTimeString().slice(0, 5));
 };
+
+

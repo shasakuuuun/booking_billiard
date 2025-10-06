@@ -1,264 +1,247 @@
+// ==================== DEPENDENCIES ====================
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const cron = require('node-cron');
-require('dotenv').config(); 
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ==================== MIDDLEWARE ====================
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Admin credentials
+// ==================== ADMIN CONFIG ====================
 const ADMIN_CREDENTIALS = {
     username: 'admin',
     password: 'billiard123'
 };
-
-// Session storage (simple in-memory)
 let adminSessions = new Set();
 
-// Database connection
+// ==================== DATABASE CONNECTION ====================
 const db = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_DATABASE || 'billiard_booking'
 });
 
-db.connect((err) => {
+db.connect(err => {
     if (err) {
         console.error('❌ Database connection failed:', err);
-        return;
+        process.exit(1);
     }
     console.log('✅ Connected to MySQL database');
 });
 
-// Generate session token
+// ==================== UTILITY FUNCTIONS ====================
 function generateSessionToken() {
     return Math.random().toString(36).substr(2) + Date.now().toString(36);
 }
 
-// Protect admin routes middleware
 function requireAdmin(req, res, next) {
     const token = req.headers['authorization'];
-    
     if (!token || !adminSessions.has(token)) {
         return res.status(401).json({ error: 'Unauthorized: Admin access required' });
     }
-    
     next();
 }
 
-// Function untuk kirim command ke ESP32
 function sendCommandToESP(command) {
     console.log(`📡 Sending to ESP32: ${command}`);
-    
-    // Nanti akan diimplementasi untuk komunikasi dengan ESP32
+    // Implementasi komunikasi ke ESP bisa pakai HTTP request:
     // const axios = require('axios');
-    // axios.post('http://ESP32_IP/control', { action: command })
-    //   .catch(err => console.log('ESP32 connection error:', err.message));
+    // axios.post('http://ESP_IP/control', { action: command });
 }
 
-// ==================== PUBLIC API ROUTES ====================
+// ==================== PUBLIC API ====================
 
-// Get bookings
+// Ambil semua booking hari ini
 app.get('/api/bookings', (req, res) => {
     const query = 'SELECT * FROM bookings WHERE tanggal = CURDATE() ORDER BY jam_mulai';
     db.query(query, (err, results) => {
         if (err) {
-            console.error('Database error:', err);
-            res.status(500).json({ error: err.message });
-            return;
+            console.error('❌ Database error:', err);
+            return res.status(500).json({ error: err.message });
         }
         res.json(results);
     });
 });
 
-// Create booking
+// Tambah booking baru
 app.post('/api/booking', (req, res) => {
-    const { nama, jam_mulai, durasi } = req.body;
-    
-    // Validasi input
-    if (!nama || !jam_mulai || !durasi) {
+    const { nama, jam_mulai, durasi, meja_id } = req.body;
+
+    if (!nama || !jam_mulai || !durasi || !meja_id) {
         return res.status(400).json({ error: 'Semua field harus diisi' });
     }
 
-    // Hitung jam selesai
     const jamMulai = new Date(`1970-01-01T${jam_mulai}:00`);
-    const jamSelesai = new Date(jamMulai.getTime() + (durasi * 60 * 60 * 1000));
+    const jamSelesai = new Date(jamMulai.getTime() + durasi * 60 * 60 * 1000);
     const jamSelesaiStr = jamSelesai.toTimeString().slice(0, 5);
 
     const query = `
-        INSERT INTO bookings (nama, jam_mulai, jam_selesai, tanggal, durasi) 
-        VALUES (?, ?, ?, CURDATE(), ?)
+        INSERT INTO bookings (nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi)
+        VALUES (?, ?, ?, ?, CURDATE(), ?)
     `;
-    
-    db.query(query, [nama, jam_mulai, jamSelesaiStr, durasi], (err, result) => {
+
+    db.query(query, [nama, meja_id, jam_mulai, jamSelesaiStr, durasi], (err, result) => {
         if (err) {
-            console.error('Database error:', err);
-            res.status(500).json({ error: err.message });
-            return;
+            console.error('❌ Database error:', err);
+            return res.status(500).json({ error: err.message });
         }
-        
-        console.log(`📅 New booking: ${nama} - ${jam_mulai} (${durasi}h)`);
-        res.json({ 
-            message: 'Booking berhasil!', 
-            booking_id: result.insertId 
-        });
+
+        console.log(`📅 New booking: ${nama} (Meja ${meja_id}) ${jam_mulai}-${jamSelesaiStr}`);
+        res.json({ message: 'Booking berhasil!', booking_id: result.insertId });
     });
 });
 
-// Get lampu status
+// Ambil status semua lampu meja
 app.get('/api/lampu/status', (req, res) => {
-    const query = 'SELECT * FROM meja_billiard';
-    db.query(query, (err, results) => {
+    db.query('SELECT * FROM meja_billiard ORDER BY id ASC', (err, results) => {
         if (err) {
-            console.error('Database error:', err);
-            res.status(500).json({ error: err.message });
-            return;
+            console.error('❌ Database error:', err);
+            return res.status(500).json({ error: err.message });
         }
         res.json(results);
     });
 });
 
-// ==================== ADMIN AUTH ROUTES ====================
-
-// Admin login
+// ==================== ADMIN AUTH ====================
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
-    
-    if (!username || !password) {
-        return res.status(400).json({ error: 'Username dan password harus diisi' });
-    }
-    
-    if (username === ADMIN_CREDENTIALS.username && 
-        password === ADMIN_CREDENTIALS.password) {
-        
-        const sessionToken = generateSessionToken();
-        adminSessions.add(sessionToken);
-        
+    if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+        const token = generateSessionToken();
+        adminSessions.add(token);
         console.log(`🔐 Admin login successful: ${username}`);
-        res.json({ 
-            message: 'Login berhasil',
-            token: sessionToken,
-            username: username
-        });
+        res.json({ message: 'Login berhasil', token, username });
     } else {
-        console.log(`❌ Failed login attempt: ${username}`);
         res.status(401).json({ error: 'Username atau password salah' });
     }
 });
 
-// Admin logout
 app.post('/api/admin/logout', (req, res) => {
     const { token } = req.body;
-    
-    if (token) {
-        adminSessions.delete(token);
-        console.log('🚪 Admin logged out');
-    }
-    
+    if (token) adminSessions.delete(token);
+    console.log('🚪 Admin logged out');
     res.json({ message: 'Logout berhasil' });
 });
 
-// Verify admin session
-app.post('/api/admin/verify', (req, res) => {
-    const { token } = req.body;
-    
-    if (token && adminSessions.has(token)) {
-        res.json({ valid: true });
-    } else {
-        res.status(401).json({ valid: false, error: 'Session expired' });
-    }
-});
+// ==================== MANUAL CONTROL ====================
 
-// ==================== ADMIN PROTECTED ROUTES ====================
-
-// Manual control (protected)
+// Manual kontrol global (butuh login admin)
 app.post('/api/lampu/control', requireAdmin, (req, res) => {
     const { action } = req.body;
-    
     if (action !== 'ON' && action !== 'OFF') {
         return res.status(400).json({ error: 'Action harus ON atau OFF' });
     }
-    
+
     const status = action === 'ON' ? 1 : 0;
-    const query = 'UPDATE meja_billiard SET status_lampu = ? WHERE id = 1';
-    
-    db.query(query, [status], (err, result) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        
-        console.log(`Manual control: ${action}`);
+    db.query('UPDATE meja_billiard SET status_lampu = ?', [status], err => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        console.log(`🧠 Manual control: Semua lampu ${action}`);
         sendCommandToESP(action);
-        res.json({ message: `Lampu berhasil di-${action}` });
+        res.json({ message: `Semua lampu berhasil di-${action}` });
+    });
+});
+
+// Manual kontrol per meja (tanpa admin login)
+app.post('/api/manual-control', (req, res) => {
+    const { meja_id, action } = req.body;
+    if (!meja_id || !action) {
+        return res.status(400).json({ message: 'Data tidak lengkap.' });
+    }
+
+    const status = action === 'ON';
+    db.query('UPDATE meja_billiard SET status_lampu = ? WHERE id = ?', [status, meja_id], err => {
+        if (err) {
+            console.error('❌ Gagal update status lampu:', err);
+            return res.status(500).json({ message: 'Gagal update status lampu.' });
+        }
+
+        sendCommandToESP(`${action}${meja_id}`);
+        console.log(`💡 Meja ${meja_id} ${action}`);
+        res.json({ message: `Lampu Meja ${meja_id} ${action === 'ON' ? 'dinyalakan' : 'dimatikan'}.` });
+    });
+});
+
+// ==================== STATUS MEJA (untuk admin.html) ====================
+app.get('/api/status-meja', (req, res) => {
+    const query = `
+        SELECT 
+            m.id,
+            m.nama_meja,
+            m.status_lampu,
+            COALESCE(b.status, 'kosong') AS status_booking
+        FROM meja_billiard m
+        LEFT JOIN bookings b 
+            ON m.id = b.meja_id
+            AND b.tanggal = CURDATE()
+            AND b.jam_mulai <= CURTIME()
+            AND b.jam_selesai > CURTIME()
+        ORDER BY m.id ASC
+    `;
+    db.query(query, (err, result) => {
+        if (err) {
+            console.error('❌ Error ambil status meja:', err);
+            return res.status(500).json({ error: 'Gagal ambil data meja' });
+        }
+        res.json(result);
     });
 });
 
 // ==================== CRON JOB ====================
-
-// Cron job untuk kontrol lampu otomatis (jalan setiap menit)
 cron.schedule('* * * * *', () => {
-    const currentTime = new Date().toTimeString().slice(0, 5);
-    const currentDate = new Date().toISOString().slice(0, 10);
-    
-    // Cek booking yang seharusnya aktif sekarang
-    const query = `
-        SELECT * FROM bookings 
-        WHERE tanggal = ? 
-        AND jam_mulai <= ? 
-        AND jam_selesai > ? 
-        AND status != 'completed'
-    `;
-    
-    db.query(query, [currentDate, currentTime, currentTime], (err, activeBookings) => {
-        if (err) {
-            console.error('Cron job error:', err);
-            return;
-        }
+    const now = new Date();
+    const timeNow = now.toTimeString().slice(0, 5);
+    const dateNow = now.toISOString().slice(0, 10);
+    console.log(`⏰ Checking bookings at ${dateNow} ${timeNow}`);
 
-        // Update status lampu berdasarkan booking aktif
-        const shouldLightOn = activeBookings.length > 0;
-        
-        if (shouldLightOn) {
-            // Nyalakan lampu dan update status booking
-            db.query('UPDATE meja_billiard SET status_lampu = TRUE WHERE id = 1');
-            
-            activeBookings.forEach(booking => {
-                db.query('UPDATE bookings SET status = "active" WHERE id = ?', [booking.id]);
+    db.query('SELECT * FROM meja_billiard', (err, mejaList) => {
+        if (err) return console.error('❌ Gagal ambil data meja:', err);
+
+        mejaList.forEach(meja => {
+            const q = `
+                SELECT * FROM bookings
+                WHERE tanggal = ? 
+                AND meja_id = ? 
+                AND jam_mulai <= ? 
+                AND jam_selesai > ? 
+                AND status != 'completed'
+            `;
+            db.query(q, [dateNow, meja.id, timeNow, timeNow], (err, active) => {
+                if (err) return console.error(err);
+
+                const lampuOn = active.length > 0;
+                const status = lampuOn ? 1 : 0;
+
+                db.query('UPDATE meja_billiard SET status_lampu = ? WHERE id = ?', [status, meja.id]);
+                if (lampuOn) {
+                    active.forEach(b => db.query('UPDATE bookings SET status="active" WHERE id=?', [b.id]));
+                    sendCommandToESP(`ON${meja.id}`);
+                    console.log(`💡 Meja ${meja.id} NYALA`);
+                } else {
+                    sendCommandToESP(`OFF${meja.id}`);
+                    console.log(`⚫ Meja ${meja.id} MATI`);
+                }
+
+                db.query(`
+                    UPDATE bookings 
+                    SET status='completed'
+                    WHERE tanggal=? AND meja_id=? AND jam_selesai <= ? AND status != 'completed'
+                `, [dateNow, meja.id, timeNow]);
             });
-            
-            console.log(`🔴 LAMPU NYALA - Ada ${activeBookings.length} booking aktif (${currentTime})`);
-            sendCommandToESP('ON');
-            
-        } else {
-            // Matikan lampu
-            db.query('UPDATE meja_billiard SET status_lampu = FALSE WHERE id = 1');
-            console.log(`⚫ LAMPU MATI - Tidak ada booking aktif (${currentTime})`);
-            sendCommandToESP('OFF');
-        }
-
-        // Update booking yang sudah selesai
-        const completeQuery = `
-            UPDATE bookings 
-            SET status = 'completed' 
-            WHERE tanggal = ? AND jam_selesai <= ? AND status != 'completed'
-        `;
-        db.query(completeQuery, [currentDate, currentTime]);
+        });
     });
 });
 
-// ==================== SERVER START ====================
-
+// ==================== START SERVER ====================
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📊 Database: ${process.env.DB_DATABASE}`);
-    console.log(`⏰ Cron job: Checking every minute for automatic lighting`);
-    console.log(`🔐 Admin credentials: username='admin', password='billiard123'`);
+    console.log(`⏰ Cron job: Checking every minute`);
+    console.log(`🔐 Admin login: admin / billiard123`);
 });
