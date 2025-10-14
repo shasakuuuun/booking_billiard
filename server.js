@@ -238,6 +238,57 @@ cron.schedule('* * * * *', () => {
     });
 });
 
+// ==================== KOMUNIKASI DENGAN ESP32 ====================
+let lastCommand = ""; // menyimpan perintah terakhir (misal ON1 / OFF2)
+
+// ESP32 mengambil perintah terakhir dari server
+app.get("/api/esp-command", (req, res) => {
+    res.send(lastCommand);
+    lastCommand = ""; // kosongkan setelah dikirim agar tidak diulang
+});
+
+// Web mengirim perintah ke ESP32 (misal dari cron atau manual control)
+app.post("/api/send-command", (req, res) => {
+    const { command } = req.body;
+    if (!command) return res.status(400).json({ error: "Command kosong" });
+
+    lastCommand = command;
+    console.log(`📡 Command disimpan untuk ESP32: ${command}`);
+    res.json({ message: `Command ${command} diterima` });
+});
+
+// ESP32 mengirim update status lampu ke server
+app.post("/api/update-status", (req, res) => {
+    const { meja1, meja2 } = req.body;
+    console.log(`💡 Update dari ESP -> Meja1: ${meja1}, Meja2: ${meja2}`);
+
+    const query = `
+        UPDATE meja_billiard
+        SET status_lampu = CASE
+            WHEN id = 1 THEN ?
+            WHEN id = 2 THEN ?
+            ELSE status_lampu
+        END
+    `;
+
+    db.query(query, [meja1, meja2], (err) => {
+        if (err) {
+            console.error("❌ Gagal update status meja:", err);
+            return res.status(500).json({ error: "Database error" });
+        }
+        res.json({ message: "✅ Status meja diperbarui oleh ESP" });
+    });
+});
+
+// ESP32 kirim sinyal hidup (heartbeat)
+app.post("/api/esp-heartbeat", (req, res) => {
+    const { status, ip } = req.body;
+    console.log(`💓 ESP32 ${status} (IP: ${ip})`);
+    res.json({ message: "ESP heartbeat diterima" });
+});
+
+
+
 // ==================== START SERVER ====================
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);

@@ -1070,7 +1070,7 @@
 
         async function loadStatusMeja() {
             try {
-                const response = await fetch('http://localhost:3000/api/status-meja');
+                const response = await fetch('http://10.169.141.29:3000/api/status-meja');
                 const data = await response.json();
 
                 const container = document.getElementById('statusMeja');
@@ -1097,7 +1097,7 @@
         // Fungsi untuk kontrol manual tiap meja
         async function manualControl(mejaId, action) {
             try {
-                const response = await fetch(`http://localhost:3000/api/manual-control`, {
+                const response = await fetch(`http://10.169.141.29:3000/api/manual-control`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ meja_id: mejaId, action })
