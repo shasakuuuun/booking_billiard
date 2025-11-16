@@ -1070,7 +1070,7 @@
 
         async function loadStatusMeja() {
             try {
-                const response = await fetch('http://10.169.141.29:3000/api/status-meja');
+                const response = await fetch('http://10.173.30.29:3000/api/status-meja');
                 const data = await response.json();
 
                 const container = document.getElementById('statusMeja');
@@ -1096,21 +1096,32 @@
         }
         // Fungsi untuk kontrol manual tiap meja
         async function manualControl(mejaId, action) {
-            try {
-                const response = await fetch(`http://10.169.141.29:3000/api/manual-control`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ meja_id: mejaId, action })
-                });
+    try {
+        const command = `${action}${mejaId}`; // Contoh: ON1 / OFF2
 
-                const result = await response.json();
-                alert(result.message);
-                loadStatusMeja(); // refresh status setelah diubah
-            } catch (error) {
-                console.error('Gagal kirim perintah manual:', error);
-                alert('Gagal mengirim perintah ke server!');
-            }
+        const response = await fetch(`http://10.173.30.29:3000/api/send-command`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert(`✅ ${result.message}`);
+            console.log(`📤 Perintah terkirim: ${command}`);
+        } else {
+            alert(`❌ ${result.error || "Gagal kirim perintah ke server!"}`);
         }
+
+        // Refresh status meja setelah kirim perintah
+        loadStatusMeja();
+    } catch (error) {
+        console.error('❌ Gagal kirim perintah manual:', error);
+        alert('❌ Gagal mengirim perintah ke server!');
+    }
+}
+
 
     </script>
 </body>
