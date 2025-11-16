@@ -4,21 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🎱 Smart Billiard Booking</title>
+
+    <!-- CSS -->
     <link rel="stylesheet" href="style.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body>
-    <div class="container">
-        <header>
-            <h1>🎱 Genzyeeeh Billiard Booking</h1>
+    <div class="booking-wrapper">
+        
+        <!-- HEADER -->
+        <header class="booking-header">
+            <h1 class="title">🎱 Genzyeeeh Billiard Booking</h1>
             <div class="status-indicator">
                 <span id="lampuStatus">⚫ Lampu: OFF</span>
             </div>
         </header>
 
-        <div class="booking-section">
+        <!-- BOOKING FORM -->
+        <section class="booking-section">
             <h2>📅 Form Booking</h2>
+
             <form id="bookingForm">
+                
                 <div class="form-group">
                     <label for="nama">👤 Nama Customer:</label>
                     <input type="text" id="nama" name="nama" required placeholder="Masukkan nama Anda">
@@ -40,6 +48,7 @@
                         <option value="5">5 Jam</option>
                     </select>
                 </div>
+
                 <div class="form-group">
                     <label for="meja">🎱 Pilih Meja:</label>
                     <select id="meja" name="meja" required>
@@ -49,36 +58,30 @@
                     </select>
                 </div>
 
-
-                <button type="submit" class="btn-submit"> Book Sekarang!</button>
+                <button type="submit" class="btn-submit">Book Sekarang!</button>
             </form>
-        </div>
+        </section>
 
-        <div class="schedule-section">
+        <!-- TODAY SCHEDULE -->
+        <section class="schedule-section">
             <h2>📋 Jadwal Booking Hari Ini</h2>
+
             <div class="current-time">
                 Waktu Sekarang: <span id="currentTime">--:--</span>
             </div>
+
             <div id="scheduleList">
                 <div class="loading">Loading jadwal...</div>
             </div>
-        </div>
+        </section>
 
-        <!-- <div class="info-section">
-            <h3>ℹ️ Cara Kerja Sistem:</h3>
-            <ul>
-                <li>🔴 Lampu akan <strong>otomatis NYALA</strong> sesuai jam booking</li>
-                <li>⚫ Lampu akan <strong>otomatis MATI</strong> setelah waktu habis</li>
-                <li>⏰ Sistem cek booking setiap menit</li>
-                <li>📱 Real-time monitoring status lampu</li>
-            </ul>
-        </div> -->
-
-        <div class="admin-link">
+        <!-- ADMIN PANEL LINK -->
+        <!-- <div class="admin-link">
             <a href="login.html" class="btn-admin">Admin Panel</a>
-        </div>
+        </div> -->
     </div>
 
+    <!-- JS -->
     <script src="script.js"></script>
 </body>
 </html>

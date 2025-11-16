@@ -1,1128 +1,492 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Admin - Genzyeeeh Billiard</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f1f2f3;
-            color: #334155;
-            line-height: 1.5;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 260px;
-            height: 100vh;
-            background: #ffffff;
-            border-right: 1px solid #e2e8f0;
-            padding: 24px 0;
-            z-index: 100;
-        }
-
-        .sidebar-header {
-            padding: 0 24px 24px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            background: #3b82f6;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-        }
-
-        .user-details h3 {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1e293b;
-        }
-
-        .user-details p {
-            font-size: 13px;
-            color: #64748b;
-        }
-
-        .sidebar-nav {
-            padding: 24px 0;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 24px;
-            color: #64748b;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-            border-right: 3px solid transparent;
-        }
-
-        .nav-item:hover,
-        .nav-item.active {
-            background: #f1f5f9;
-            color: #3b82f6;
-            border-right-color: #3b82f6;
-        }
-
-        .nav-icon {
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Main Content */
-        .main-content {
-            margin-left: 260px;
-            padding: 24px;
-        }
-
-        .header {
-            margin-bottom: 32px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .header-left h1 {
-            font-size: 24px;
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 4px;
-        }
-
-        .header-left p {
-            color: #64748b;
-            font-size: 14px;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 12px;
-        }
-
-        /* Stats Cards */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 24px;
-            margin-bottom: 32px;
-        }
-
-        .stat-card {
-            background: rgb(250, 234, 234);
-            border-radius: 12px;
-            padding: 24px;
-            border: 1px solid #e2e8f0;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-        }
-
-        .stat-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-        }
-
-        .stat-title {
-            font-size: 14px;
-            font-weight: 500;
-            color: #64748b;
-        }
-
-        .stat-icon {
-            width: 32px;
-            height: 32px;
-            background: #f1f5f9;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-        }
-
-        .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 8px;
-            line-height: 1;
-        }
-
-        .stat-change {
-            font-size: 13px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .stat-change.positive {
-            color: #059669;
-        }
-
-        .stat-change.negative {
-            color: #dc2626;
-        }
-
-        .stat-change.neutral {
-            color: #64748b;
-        }
-
-        /* Chart Area */
-        .chart-container {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            border: 1px solid #e2e8f0;
-            margin-bottom: 32px;
-            height: 200px;
-            position: relative;
-        }
-
-        .chart-svg {
-            width: 100%;
-            height: 100%;
-        }
-
-        /* Control Panel */
-        .control-panel {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            border: 1px solid #e2e8f0;
-            margin-bottom: 32px;
-        }
-
-        .control-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .control-buttons {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 12px 24px;
-            border-radius: 8px;
-            border: none;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-primary {
-            background: #3b82f6;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #2563eb;
-        }
-
-        .btn-success {
-            background: #10b981;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #059669;
-        }
-
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #dc2626;
-        }
-
-        .btn-secondary {
-            background: #f1f5f9;
-            color: #64748b;
-            border: 1px solid #e2e8f0;
-        }
-
-        .btn-secondary:hover {
-            background: #e2e8f0;
-            color: #475569;
-        }
-
-        /* Bookings List */
-        .bookings-section {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .booking-item {
-            padding: 16px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            transition: all 0.2s;
-        }
-
-        .booking-item:hover {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .booking-item.active {
-            border-color: #10b981;
-            background: #f0fdf4;
-        }
-
-        .booking-item.completed {
-            opacity: 0.6;
-            background: #f8fafc;
-        }
-
-        .booking-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .booking-name {
-            font-weight: 600;
-            color: #1e293b;
-        }
-
-        .booking-status {
-            font-size: 12px;
-            font-weight: 500;
-            padding: 4px 8px;
-            border-radius: 12px;
-        }
-
-        .status-active {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .status-pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .status-completed {
-            background: #f1f5f9;
-            color: #64748b;
-        }
-
-        .booking-details {
-            font-size: 14px;
-            color: #64748b;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 16px;
-        }
-
-        /* Alert */
-        .alert {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .alert-success {
-            background: #dcfce7;
-            color: #166534;
-            border: 1px solid #bbf7d0;
-        }
-
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-
-        .alert-info {
-            background: #dbeafe;
-            color: #1e40af;
-            border: 1px solid #bfdbfe;
-        }
-
-        /* Loading */
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #64748b;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #64748b;
-        }
-
-        .empty-state h3 {
-            margin-bottom: 8px;
-            color: #1e293b;
-        }
-
-        /* System Info */
-        .system-info {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-top: 20px;
-        }
-
-        .info-card {
-            background: #f8fafc;
-            padding: 16px;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-        }
-
-        .info-label {
-            font-size: 12px;
-            font-weight: 500;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-        }
-
-        .info-value {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1e293b;
-        }
-
-        /* Mobile Menu Toggle */
-        .mobile-menu-toggle {
-            display: none;
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: #64748b;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .mobile-menu-toggle {
-                display: block;
-            }
-
-            .sidebar {
-                transform: translateX(-100%);
-                transition: transform 0.3s;
-            }
-
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .main-content {
-                margin-left: 0;
-                padding: 16px;
-            }
-
-            .header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 16px;
-            }
-
-            .header-actions {
-                width: 100%;
-                justify-content: space-between;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-                gap: 16px;
-            }
-
-            .control-buttons {
-                flex-direction: column;
-            }
-
-            .btn {
-                width: 100%;
-                justify-content: center;
-            }
-
-            .booking-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
-
-            .booking-details {
-                flex-direction: column;
-                gap: 8px;
-            }
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin - Genzyeeeh Billiard</title>
+  <style>
+    /* ---------- RESET ---------- */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html,body { height:100%; }
+    body {
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      background: #f7fafc;
+      color: #0f172a;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+    .wrap { max-width:1200px; margin:20px auto; padding:16px; }
+
+    /* ---------- LAYOUT ---------- */
+    .sidebar {
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: 240px;
+      background: #ffffff;
+      border-right: 1px solid #e6eef8;
+      padding: 20px;
+      overflow:auto;
+    }
+    .main { margin-left: 260px; padding: 20px; }
+
+    .user {
+      display:flex; gap:12px; align-items:center; margin-bottom:18px;
+      border-bottom:1px solid #eef2f7; padding-bottom:12px;
+    }
+    .avatar { width:44px; height:44px; background:#2563eb; color:white; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700; }
+    .username h3 { font-size:15px; margin-bottom:2px; }
+    .username p { font-size:13px; color:#64748b; }
+
+    .nav { margin-top:18px; display:flex; flex-direction:column; gap:8px; }
+    .nav a { display:flex; align-items:center; gap:8px; padding:10px; color:#475569; text-decoration:none; border-radius:8px; cursor:pointer; }
+    .nav a.active, .nav a:hover { background:#f1f5f9; color:#1e3a8a; }
+
+    /* ---------- HEADER ---------- */
+    .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:12px; }
+    .header-left h1 { font-size:20px; margin-bottom:4px; }
+    .header-left p { color:#64748b; font-size:13px; }
+
+    .btn { padding:10px 14px; border-radius:8px; border:0; cursor:pointer; font-weight:600; }
+    .btn-secondary { background:#f1f5f9; color:#475569; }
+    .btn-primary { background:#2563eb; color:white; }
+    .btn-success { background:#059669; color:white; }
+    .btn-danger { background:#ef4444; color:white; }
+
+    /* ---------- GRID / CARDS ---------- */
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:18px; }
+    .card { background:white; border-radius:10px; padding:16px; border:1px solid #e6eef8; }
+    .card .title { font-size:13px; color:#64748b; margin-bottom:10px; }
+    .card .value { font-size:24px; font-weight:700; color:#0f172a; }
+
+    /* ---------- BOOKING LIST ---------- */
+    .bookings { display:flex; flex-direction:column; gap:10px; }
+    .booking { padding:12px; border-radius:8px; border:1px solid #eef2f7; background:#fff; }
+    .booking .meta { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:8px; }
+    .badge { padding:6px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+    .badge.active { background:#dcfce7; color:#166534; }
+    .badge.pending { background:#fef3c7; color:#92400e; }
+    .badge.completed { background:#f1f5f9; color:#475569; }
+
+    /* ---------- STATUS MEJA ---------- */
+    #statusMeja { display:flex; gap:12px; flex-wrap:wrap; }
+    .meja-card { width:calc(50% - 8px); min-width:220px; background:#fff; border:1px solid #eef2f7; border-radius:8px; padding:12px; }
+
+    /* ---------- FORM for quick test ---------- */
+    .small-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .small-form input, .small-form select { padding:8px 10px; border-radius:6px; border:1px solid #e6eef8; }
+
+    /* ---------- ALERT (floating) ---------- */
+    .toast {
+      position: fixed;
+      right: 20px;
+      top: 20px;
+      min-width:200px;
+      padding:10px 14px;
+      border-radius:8px;
+      color:white;
+      font-weight:600;
+      box-shadow: 0 6px 18px rgba(2,6,23,0.12);
+      z-index: 9999;
+      opacity:1;
+      transition: opacity .3s ease;
+    }
+    .toast.info { background:#0ea5e9; }
+    .toast.success { background:#059669; }
+    .toast.error { background:#ef4444; }
+
+    /* ---------- RESPONSIVE ---------- */
+    @media (max-width:900px) {
+      .sidebar { position:relative; width:100%; height:auto; border-right:0; margin-bottom:12px; }
+      .main { margin-left:0; }
+      .meja-card { width:100%; }
+    }
+  </style>
 </head>
 <body>
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <div class="user-info">
-                <div class="user-avatar">S</div>
-                <div class="user-details">
-                    <h3 id="adminUsername">Shasa</h3>
-                    <p>admin@billiard.co</p>
-                </div>
-            </div>
-        </div>
-        
-        <nav class="sidebar-nav">
-            <a href="#" class="nav-item active" onclick="showSection('dashboard')">
-                <span class="nav-icon">📊</span>
-                Dashboard
-            </a>
-            <a href="index.html" class="nav-item">
-                <span class="nav-icon">📋</span>
-                Booking Page
-            </a>
-            <a href="#" class="nav-item" onclick="showSection('lamp')">
-                <span class="nav-icon">💡</span>
-                Lamp Control
-            </a>
-            <a href="#" class="nav-item" onclick="showSection('settings')">
-                <span class="nav-icon">🔧</span>
-                Settings
-            </a>
-            <a href="#" class="nav-item" onclick="showSection('analytics')">
-                <span class="nav-icon">📈</span>
-                Analytics
-            </a>
-        </nav>
+  <div class="sidebar" id="sidebar">
+    <div class="user">
+      <div class="avatar" id="avatar">S</div>
+      <div class="username">
+        <h3 id="adminUsername">Admin</h3>
+        <p>admin@billiard.co</p>
+      </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <div class="header">
-            <button class="mobile-menu-toggle" onclick="toggleSidebar()">☰</button>
-            <div class="header-left">
-                <h1>Hey, shasa!</h1>
-                <p id="currentDate">Monday, October 23, 2023</p>
-            </div>
-            <div class="header-actions">
-                <button class="btn btn-secondary" onclick="window.location.href='index.html'">
-                    <span>←</span> Back to Booking
-                </button>
-                <button id="logoutBtn" class="btn btn-secondary">
-                    <span>🚪</span> Logout
-                </button>
-            </div>
-        </div>
+    <nav class="nav">
+      <a class="nav-item active" data-target="dashboard">📊 Dashboard</a>
+      <a class="nav-item" data-target="lamp">💡 Lamp Control</a>
+      <a class="nav-item" data-target="bookings">📋 Bookings</a>
+      <a class="nav-item" data-target="settings">⚙️ Settings</a>
+    </nav>
+  </div>
 
+  <div class="main wrap">
+    <div class="header">
+      <div class="header-left">
+        <h1>Hey, <span id="displayName">Admin</span>!</h1>
+        <p id="currentDate">--</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="window.location.href='index.html'">← Booking Page</button>
+        <button id="logoutBtn" class="btn btn-secondary">🚪 Logout</button>
+      </div>
+    </div>
 
+    <!-- Dashboard -->
     <div id="dashboard" class="section">
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="stat-title">Lamp Status</span>
-                    <div class="stat-icon">💡</div>
-                </div>
-                <div id="adminLampuStatus" class="stat-value" style="color: #ef4444;">OFF</div>
-                <div id="lastUpdate" class="stat-change neutral">
-                    Last update: <span id="updateTime">--:--</span>
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="stat-title">Today's Bookings</span>
-                    <div class="stat-icon">📅</div>
-                </div>
-                <div id="totalBooking" class="stat-value">0</div>
-                <div class="stat-change positive">
-                    Total reservations
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="stat-title">Active Sessions</span>
-                    <div class="stat-icon">🔴</div>
-                </div>
-                <div id="activeBooking" class="stat-value" style="color: #10b981;">0</div>
-                <div class="stat-change positive">
-                    Currently playing
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="stat-title">System Status</span>
-                    <div class="stat-icon">🟢</div>
-                </div>
-                <div class="stat-value" style="font-size: 20px;">Online</div>
-                <div class="stat-change positive">
-                    All systems operational
-                </div>
-            </div>
-        </div>
-    
-        
-
-        <!-- Chart Container -->
-        <div class="chart-container">
-            <h3 style="margin-bottom: 16px; color: #1e293b;">Booking Activity</h3>
-            <svg class="chart-svg" viewBox="0 0 400 120">
-                <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3"/>
-                        <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0"/>
-                    </linearGradient>
-                </defs>
-                <path d="M0,80 L50,70 L100,85 L150,60 L200,45 L250,55 L300,35 L350,40 L400,25" 
-                      stroke="#3b82f6" stroke-width="2" fill="none"/>
-                <path d="M0,80 L50,70 L100,85 L150,60 L200,45 L250,55 L300,35 L350,40 L400,25 L400,120 L0,120 Z" 
-                      fill="url(#gradient)"/>
-                <circle cx="400" cy="25" r="3" fill="#3b82f6"/>
-            </svg>
+      <div class="grid">
+        <div class="card">
+          <div class="title">Lamp Status</div>
+          <div id="adminLampuStatus" class="value" style="color:#ef4444;">OFF</div>
+          <div style="margin-top:8px; color:#64748b; font-size:13px">Last update: <span id="updateTime">--:--</span></div>
         </div>
 
-        <!-- Bookings Section -->
-        <div class="bookings-section">
-            <h2 class="section-title">
-                📋 All Bookings Today
-            </h2>
-            <div id="adminBookingList">
-                <div class="loading">Loading bookings...</div>
-            </div>
+        <div class="card">
+          <div class="title">Today's Bookings</div>
+          <div id="totalBooking" class="value">0</div>
+          <div style="margin-top:8px; color:#64748b; font-size:13px">Total reservations</div>
         </div>
+
+        <div class="card">
+          <div class="title">Active Sessions</div>
+          <div id="activeBooking" class="value" style="color:#059669">0</div>
+          <div style="margin-top:8px; color:#64748b; font-size:13px">Currently playing</div>
+        </div>
+
+        <div class="card">
+          <div class="title">System Status</div>
+          <div class="value" style="font-size:18px">Online</div>
+          <div style="margin-top:8px; color:#64748b; font-size:13px">Auto-check setiap 60s</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="title">Booking Activity (preview)</div>
+        <div style="height:140px; display:flex; align-items:center; justify-content:center; color:#64748b;">
+          Grafik sederhana / mockup
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:12px;">📋 All Bookings Today</h3>
+        <div id="adminBookingList" class="bookings">
+          <div class="booking">Loading bookings...</div>
+        </div>
+      </div>
     </div>
 
-        <!-- ================= LAMP CONTROL ================= -->
-        <div id="lamp" class="section" style="display:none;">
-            <!-- Control Panel -->
-            <div class="control-panel">
-                <h2 class="control-title">🎛️ Manual Control</h2>
-                <p style="color: #64748b; margin-bottom: 20px;">
-                    Manual control allows you to turn ON/OFF each table lamp manually
-                </p>
+    <!-- Lamp Control -->
+    <div id="lamp" class="section" style="display:none;">
+      <div class="card" style="margin-bottom:12px;">
+        <h3>🎛️ Manual Control</h3>
+        <p style="color:#64748b; margin:8px 0;">Kontrol manual untuk menyalakan/mematikan lampu meja.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-success" onclick="manualControl(1,'ON')">🔴 Meja 1 ON</button>
+          <button class="btn btn-danger"  onclick="manualControl(1,'OFF')">⚫ Meja 1 OFF</button>
 
-                <div class="control-buttons">
-                    <!-- Meja 1 -->
-                    <button class="btn btn-success" onclick="manualControl(1, 'ON')">🔴 Meja 1 ON</button>
-                    <button class="btn btn-danger" onclick="manualControl(1, 'OFF')">⚫ Meja 1 OFF</button>
+          <button class="btn btn-success" onclick="manualControl(2,'ON')">🔴 Meja 2 ON</button>
+          <button class="btn btn-danger"  onclick="manualControl(2,'OFF')">⚫ Meja 2 OFF</button>
 
-                    <!-- Meja 2 -->
-                    <button class="btn btn-success" onclick="manualControl(2, 'ON')">🔴 Meja 2 ON</button>
-                    <button class="btn btn-danger" onclick="manualControl(2, 'OFF')">⚫ Meja 2 OFF</button>
-
-                    <!-- Refresh -->
-                    <button id="refreshData" class="btn btn-primary" onclick="loadStatusMeja()">
-                        <span>🔄</span> Refresh Data
-                    </button>
-                </div>
-            </div>
-
-
-            <!-- System Info -->
-            <div class="control-panel">
-                <h2 class="control-title">ℹ️ System Information</h2>
-                 <div class="system-info">
-                <div class="info-card">
-                    <div class="info-label">Current Time</div>
-                    <div class="info-value" id="systemTime">--:--:--</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Server Status</div>
-                    <div class="info-value" id="serverStatus">🟢 Online</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Auto Check</div>
-                    <div class="info-value">Every 60 seconds</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">Database</div>
-                    <div class="info-value">billiard_booking</div>
-                </div>
-            </div>
-            </div>
-            <!-- Status Meja Section -->
-            <div class="control-panel">
-                <h2 class="control-title">🎱 Status Meja</h2>
-                <p style="color: #64748b; margin-bottom: 20px;">
-                    Monitoring otomatis setiap 10 detik
-                </p>
-
-                <div id="statusMeja" class="status-container">
-                    <div class="loading">Memuat status meja...</div>
-                </div>
-            </div>
-
+          <button id="refreshData" class="btn btn-primary" onclick="loadAll()">🔄 Refresh</button>
         </div>
+      </div>
 
-        <!-- ================= SETTINGS ================= -->
-        <div id="settings" class="section" style="display:none;">
-            <div class="control-panel">
-                <h2 class="control-title">⚙️ Settings</h2>
-                <p>Coming soon: konfigurasi sistem</p>
-            </div>
+      <div class="card" style="margin-bottom:12px;">
+        <h3>ℹ️ System Information</h3>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:8px; margin-top:8px;">
+          <div style="background:#fff; border:1px solid #eef2f7; padding:10px; border-radius:8px;">
+            <div style="font-size:12px; color:#64748b;">Current Time</div>
+            <div id="systemTime" style="font-weight:700; margin-top:6px;">--:--:--</div>
+          </div>
+          <div style="background:#fff; border:1px solid #eef2f7; padding:10px; border-radius:8px;">
+            <div style="font-size:12px; color:#64748b;">Server Status</div>
+            <div id="serverStatus" style="font-weight:700; margin-top:6px;">🟢 Online</div>
+          </div>
+          <div style="background:#fff; border:1px solid #eef2f7; padding:10px; border-radius:8px;">
+            <div style="font-size:12px; color:#64748b;">Auto Check</div>
+            <div style="font-weight:700; margin-top:6px;">Every 60 seconds</div>
+          </div>
         </div>
+      </div>
 
-        <!-- ================= ANALYTICS ================= -->
-        <div id="analytics" class="section" style="display:none;">
-            <div class="control-panel">
-                <h2 class="control-title">📈 Analytics</h2>
-                <p>Coming soon: grafik & laporan</p>
-            </div>
+      <div class="card">
+        <h3>🎱 Status Meja</h3>
+        <p style="color:#64748b; margin:8px 0;">Monitoring otomatis setiap 10 detik</p>
+        <div id="statusMeja">
+          <div class="booking">Memuat status meja...</div>
         </div>
+      </div>
     </div>
 
-    <script>
-        // Admin-specific JavaScript (integrated with existing system)
-        let bookings = [];
-        let lampuStatus = false;
-        let adminToken = null;
+    <!-- Bookings page (detail management) -->
+    <div id="bookings" class="section" style="display:none;">
+      <div class="card">
+        <h3>📋 Semua Booking (Hari Ini)</h3>
+        <div id="detailedBookings" class="bookings" style="margin-top:12px;">
+          <div class="booking">Memuat...</div>
+        </div>
+      </div>
+    </div>
 
-        // Initialize admin panel
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🔧 Admin panel loaded');
-            
-            // Set current date
-            const now = new Date();
-            document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-            });
-            
-            // Check authentication
-            checkAuth();
-            
-            // Initialize if authenticated
-            loadAdminData();
-            updateSystemTime();
-            
-            // Event listeners
-            document.getElementById('manualOn').addEventListener('click', () => controlLampu('ON'));
-            document.getElementById('manualOff').addEventListener('click', () => controlLampu('OFF'));
-            document.getElementById('refreshData').addEventListener('click', loadAdminData);
-            document.getElementById('logoutBtn').addEventListener('click', logout);
+    <!-- Settings -->
+    <div id="settings" class="section" style="display:none;">
+      <div class="card">
+        <h3>⚙️ Settings</h3>
+        <p style="color:#64748b;">Konfigurasi lanjutan akan ditambahkan di sini.</p>
+      </div>
+    </div>
+  </div>
 
-            // Auto refresh every 30 seconds
-            setInterval(loadAdminData, 30000);
-            setInterval(updateSystemTime, 1000);
+  <!-- Toast container (dynamic) -->
+  <div id="toastRoot" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    // ---------- KONFIG ----------
+    const API_BASE = ''; // relatif ke server (tidak diubah)
+    const AUTO_REFRESH_MS = 60000; // 60s sesuai cron
+    let bookings = [];
+    let lampuStatus = false;
+    let adminToken = localStorage.getItem('adminToken') || null;
+
+    // ---------- INIT ----------
+    document.addEventListener('DOMContentLoaded', () => {
+      // tampilkan tanggal
+      const now = new Date();
+      document.getElementById('currentDate').textContent = now.toLocaleDateString('id-ID', {
+        weekday:'long', day:'numeric', month:'long', year:'numeric'
+      });
+
+      // sidebar nav handler
+      document.querySelectorAll('.nav .nav-item').forEach(n => {
+        n.addEventListener('click', (e) => {
+          document.querySelectorAll('.nav .nav-item').forEach(x=>x.classList.remove('active'));
+          e.currentTarget.classList.add('active');
+          const t = e.currentTarget.dataset.target;
+          showSection(t);
         });
+      });
 
-        // Check authentication
-        function checkAuth() {
-            adminToken = localStorage.getItem('adminToken');
-            const username = localStorage.getItem('adminUsername');
-            
-            if (!adminToken) {
-                // Not logged in, redirect to login
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            // Update UI with username
-            if (username) {
-                document.getElementById('adminUsername').textContent = username;
-            }
-            
-            console.log(`✅ Admin authenticated: ${username || 'Admin'}`);
-        }
+      // logout
+      document.getElementById('logoutBtn').addEventListener('click', logout);
 
-        // Logout function
-        async function logout() {
-            if (adminToken) {
-                try {
-                    await fetch('/api/admin/logout', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token: adminToken })
-                    });
-                } catch (error) {
-                    console.error('Logout error:', error);
-                }
-            }
-            
-            localStorage.removeItem('adminToken');
-            localStorage.removeItem('adminUsername');
-            window.location.href = 'login.html';
-        }
+      // load data awal
+      loadAll();
+      setInterval(loadAll, AUTO_REFRESH_MS);
+      setInterval(updateSystemTime, 1000);
+    });
 
-        // Load all admin data (using same API as main system)
-        async function loadAdminData() {
-            await Promise.all([
-                loadBookings(),
-                updateLampuStatus()
-            ]);
-            updateStats();
-        }
-
-        // Load bookings (same as script.js)
-        async function loadBookings() {
-            try {
-                console.log('📡 Loading bookings...');
-                const response = await fetch('/api/bookings');
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                bookings = await response.json();
-                console.log(`📋 Loaded ${bookings.length} bookings`);
-                
-                displayAdminBookings();
-                
-            } catch (error) {
-                console.error('❌ Error loading bookings:', error);
-                showAlert('Error loading bookings: ' + error.message, 'error');
-                document.getElementById('serverStatus').innerHTML = '🔴 Connection Error';
-            }
-        }
-
-        // Update lampu status (same as script.js)
-        async function updateLampuStatus() {
-            try {
-                const response = await fetch('/api/lampu/status');
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const lampuData = await response.json();
-                
-                if (lampuData.length > 0) {
-                    const newStatus = lampuData[0].status_lampu;
-                    
-                    // Only update if status changed
-                    if (newStatus !== lampuStatus) {
-                        lampuStatus = newStatus;
-                        console.log(`💡 Lampu status changed: ${lampuStatus ? 'ON' : 'OFF'}`);
-                    }
-                    
-                    const statusEl = document.getElementById('adminLampuStatus');
-                    const updateTimeEl = document.getElementById('updateTime');
-                    
-                    if (lampuStatus) {
-                        statusEl.textContent = 'ON';
-                        statusEl.style.color = '#10b981';
-                    } else {
-                        statusEl.textContent = 'OFF';
-                        statusEl.style.color = '#ef4444';
-                    }
-                    
-                    updateTimeEl.textContent = new Date().toLocaleTimeString();
-                }
-                
-            } catch (error) {
-                console.error('❌ Error updating lamp status:', error);
-                document.getElementById('serverStatus').innerHTML = '🔴 Connection Error';
-            }
-        }
-
-        // Display admin bookings
-        function displayAdminBookings() {
-            const listEl = document.getElementById('adminBookingList');
-            
-            if (bookings.length === 0) {
-                listEl.innerHTML = `
-                    <div class="empty-state">
-                        <h3>📭 No bookings today</h3>
-                        <p>All quiet on the billiard front!</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const currentTime = new Date().toTimeString().slice(0, 5);
-            
-            listEl.innerHTML = bookings.map(booking => {
-                const isActive = booking.status === 'active' || 
-                                (booking.jam_mulai <= currentTime && booking.jam_selesai > currentTime);
-                const isCompleted = booking.status === 'completed' || booking.jam_selesai <= currentTime;
-                
-                let itemClass = 'booking-item';
-                let statusClass = 'booking-status';
-                let statusText = '⏱️ Pending';
-                
-                if (isCompleted) {
-                    itemClass += ' completed';
-                    statusClass += ' status-completed';
-                    statusText = '✅ Completed';
-                } else if (isActive) {
-                    itemClass += ' active';
-                    statusClass += ' status-active';
-                    statusText = '🔴 Active';
-                } else {
-                    statusClass += ' status-pending';
-                }
-                
-                return `
-                    <div class="${itemClass}">
-                        <div class="booking-header">
-                            <div class="booking-name">👤 ${booking.nama}</div>
-                            <div class="${statusClass}">${statusText}</div>
-                        </div>
-                        <div class="booking-details">
-                            <span>⏰ ${formatTime(booking.jam_mulai)} - ${formatTime(booking.jam_selesai)}</span>
-                            <span>⏱️ ${booking.durasi} hours</span>
-                            <span>📅 ${formatDate(booking.tanggal)}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // Update statistics
-        function updateStats() {
-            const totalEl = document.getElementById('totalBooking');
-            const activeEl = document.getElementById('activeBooking');
-            
-            if (totalEl) totalEl.textContent = bookings.length;
-            
-            const currentTime = new Date().toTimeString().slice(0, 5);
-            const activeBookings = bookings.filter(booking => 
-                booking.status === 'active' || 
-                (booking.jam_mulai <= currentTime && booking.jam_selesai > currentTime)
-            );
-            
-            if (activeEl) activeEl.textContent = activeBookings.length;
-        }
-
-        // Manual control (with authentication)
-        async function controlLampu(action) {
-            try {
-                showAlert(`⏳ Sending ${action} command...`, 'info');
-                
-                const response = await fetch('/api/lampu/control', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': adminToken || 'Bearer demo-token'
-                    },
-                    body: JSON.stringify({ action })
-                });
-
-                const result = await response.json();
-                
-                if (response.ok) {
-                    showAlert(`✅ ${result.message || 'Light turned ' + action.toLowerCase() + ' successfully!'}`, 'success');
-                    setTimeout(updateLampuStatus, 1000);
-                } else if (response.status === 401) {
-                    showAlert('❌ Session expired. Please login again.', 'error');
-                    setTimeout(logout, 2000);
-                } else {
-                    showAlert(`❌ ${result.error || 'Failed to control lamp'}`, 'error');
-                }
-                
-            } catch (error) {
-                console.error('Control error:', error);
-                showAlert('❌ Failed to control lamp', 'error');
-            }
-        }
-
-        // Update system time
-        function updateSystemTime() {
-            const timeEl = document.getElementById('systemTime');
-            if (timeEl) {
-                timeEl.textContent = new Date().toLocaleTimeString();
-            }
-        }
-
-        // Show alert (same as script.js)
-        function showAlert(message, type = 'info') {
-            console.log(`Alert [${type}]: ${message}`);
-            
-            const existingAlert = document.querySelector('.alert');
-            if (existingAlert) existingAlert.remove();
-
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-
-            const mainContent = document.querySelector('.main-content');
-            const header = mainContent.querySelector('.header');
-            mainContent.insertBefore(alert, header.nextSibling);
-
-            setTimeout(() => {
-                if (alert.parentNode) alert.remove();
-            }, 5000);
-        }
-
-        // Utility functions (same as script.js)
-        function formatTime(timeString) {
-            if (!timeString) return '--:--';
-            
-            try {
-                const [hours, minutes] = timeString.split(':');
-                return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
-                } catch {
-                return '--:--';
-            }
-        }
-
-        function formatDate(dateString) {
-            if (!dateString) return '--/--/----';
-            
-            try {
-                const date = new Date(dateString);
-                return date.toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                });
-            } catch {
-                return '--/--/----';
-            }
-        }
-
-        // Sidebar toggle (mobile)
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('open');
-        }
-
-         // Fungsi tambahan untuk switch section
-        function showSection(id) {
-            // sembunyikan semua
-            document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
-            // reset menu
-            document.querySelectorAll('.sidebar-nav .nav-item').forEach(n => n.classList.remove('active'));
-            // tampilkan section dipilih
-            document.getElementById(id).style.display = 'block';
-            event.target.closest('.nav-item').classList.add('active');
-        }
-
-
-
-        // Jalankan setiap 10 detik
-        setInterval(loadStatusMeja, 10000);
-        loadStatusMeja();
-
-        async function loadStatusMeja() {
-            try {
-                const response = await fetch('http://10.173.30.29:3000/api/status-meja');
-                const data = await response.json();
-
-                const container = document.getElementById('statusMeja');
-                container.innerHTML = '';
-
-                data.forEach(meja => {
-                    const card = document.createElement('div');
-                    card.className = 'meja-card';
-
-                    const statusLampu = meja.status_lampu ? '🟢 Nyala' : '⚫ Mati';
-                    const statusBooking = meja.status_booking === 'active' ? 'Sedang Dipakai' : 'Kosong';
-
-                    card.innerHTML = `
-                        <h3>${meja.nama_meja}</h3>
-                        <p><b>Lampu:</b> ${statusLampu}</p>
-                        <p><b>Status:</b> ${statusBooking}</p>
-                    `;
-                    container.appendChild(card);
-                });
-            } catch (error) {
-                console.error('Gagal ambil status meja:', error);
-            }
-        }
-        // Fungsi untuk kontrol manual tiap meja
-        async function manualControl(mejaId, action) {
-    try {
-        const command = `${action}${mejaId}`; // Contoh: ON1 / OFF2
-
-        const response = await fetch(`http://10.173.30.29:3000/api/send-command`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ command })
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-            alert(`✅ ${result.message}`);
-            console.log(`📤 Perintah terkirim: ${command}`);
-        } else {
-            alert(`❌ ${result.error || "Gagal kirim perintah ke server!"}`);
-        }
-
-        // Refresh status meja setelah kirim perintah
-        loadStatusMeja();
-    } catch (error) {
-        console.error('❌ Gagal kirim perintah manual:', error);
-        alert('❌ Gagal mengirim perintah ke server!');
+    // ---------- NAV ----------
+    function showSection(id) {
+      if (!id) return;
+      document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-}
 
+    // ---------- TOAST ----------
+    function showToast(message, type='info', timeout=3000) {
+      const root = document.getElementById('toastRoot');
+      const d = document.createElement('div');
+      d.className = 'toast ' + (type==='error' ? 'error' : type==='success' ? 'success' : 'info');
+      d.textContent = message;
+      root.appendChild(d);
+      setTimeout(()=> { d.style.opacity = '0'; setTimeout(()=> d.remove(), 300); }, timeout);
+    }
 
-    </script>
+    // ---------- AUTH ----------
+    async function logout() {
+      const token = adminToken;
+      if (token) {
+        try {
+          await fetch(API_BASE + '/api/admin/logout', {
+            method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token })
+          });
+        } catch(e) { console.warn('logout fail', e); }
+      }
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminUsername');
+      adminToken = null;
+      window.location.href = 'login.html';
+    }
+
+    // ---------- LOAD ALL ----------
+    async function loadAll() {
+      await Promise.all([ loadBookings(), loadLampStatus(), loadStatusMeja() ]);
+      updateStats();
+    }
+
+    // ---------- LOAD BOOKINGS ----------
+    async function loadBookings() {
+      try {
+        const res = await fetch(API_BASE + '/api/bookings');
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        bookings = await res.json();
+        displayAdminBookings();
+        displayDetailedBookings();
+      } catch (err) {
+        console.error('Error loadBookings', err);
+        showToast('Gagal memuat bookings', 'error', 2500);
+      }
+    }
+
+    // ---------- LOAD LAMP STATUS ----------
+    async function loadLampStatus() {
+      try {
+        const res = await fetch(API_BASE + '/api/lampu/status');
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length>0) {
+          lampuStatus = !!data[0].status_lampu;
+          const el = document.getElementById('adminLampuStatus');
+          el.textContent = lampuStatus ? 'ON' : 'OFF';
+          el.style.color = lampuStatus ? '#059669' : '#ef4444';
+          document.getElementById('updateTime').textContent = new Date().toLocaleTimeString();
+        }
+      } catch(err) {
+        console.error('loadLampStatus', err);
+        document.getElementById('serverStatus').textContent = '🔴 Connection Error';
+      }
+    }
+
+    // ---------- LOAD STATUS MEJA ----------
+    async function loadStatusMeja() {
+      try {
+        const res = await fetch(API_BASE + '/api/status-meja');
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        const data = await res.json();
+        const container = document.getElementById('statusMeja');
+        container.innerHTML = '';
+        if (!Array.isArray(data) || data.length===0) {
+          container.innerHTML = '<div class="booking">Tidak ada data meja</div>';
+          return;
+        }
+        data.forEach(meja => {
+          const card = document.createElement('div');
+          card.className = 'meja-card';
+          const statusLampu = meja.status_lampu ? '🟢 Nyala' : '⚫ Mati';
+          const statusBooking = meja.status_booking === 'active' ? 'Sedang Dipakai' : 'Kosong';
+          card.innerHTML = `<h4 style="margin-bottom:6px">${escapeHtml(meja.nama_meja)}</h4>
+                            <div style="color:#475569;font-size:14px"><b>Lampu:</b> ${statusLampu}</div>
+                            <div style="color:#64748b;font-size:13px;margin-top:6px"><b>Status:</b> ${statusBooking}</div>`;
+          container.appendChild(card);
+        });
+      } catch(err) {
+        console.error('loadStatusMeja', err);
+      }
+    }
+
+    // ---------- DISPLAY BOOKING LIST ----------
+    function displayAdminBookings() {
+      const listEl = document.getElementById('adminBookingList');
+      if (!bookings || bookings.length===0) {
+        listEl.innerHTML = `<div class="booking"><div class="meta"><div style="font-weight:700">📭 No bookings today</div></div><div style="color:#64748b">All quiet on the billiard front!</div></div>`;
+        return;
+      }
+      const nowTime = new Date().toTimeString().slice(0,5);
+      listEl.innerHTML = bookings.map(b => {
+        const start = b.jam_mulai;
+        const end = b.jam_selesai;
+        const isActive = b.status==='active' || (start <= nowTime && end > nowTime);
+        const isCompleted = b.status==='completed' || end <= nowTime;
+        const statusBadge = isCompleted ? `<span class="badge completed">✅ Completed</span>`
+                          : isActive ? `<span class="badge active">🔴 Active</span>`
+                          : `<span class="badge pending">⏱️ Pending</span>`;
+        return `<div class="booking">
+                  <div class="meta">
+                    <div style="font-weight:700">👤 ${escapeHtml(b.nama)}</div>
+                    ${statusBadge}
+                  </div>
+                  <div style="color:#64748b;">⏰ ${formatTime(b.jam_mulai)} - ${formatTime(b.jam_selesai)} • ⏱️ ${b.durasi} jam • 📅 ${formatDate(b.tanggal)}</div>
+                </div>`;
+      }).join('');
+    }
+
+    function displayDetailedBookings() {
+      const el = document.getElementById('detailedBookings');
+      if (!bookings || bookings.length===0) {
+        el.innerHTML = `<div class="booking">Belum ada booking hari ini</div>`;
+        return;
+      }
+      el.innerHTML = bookings.map(b => {
+        const start = b.jam_mulai; const end = b.jam_selesai;
+        const isActive = b.status==='active' || (start <= new Date().toTimeString().slice(0,5) && end > new Date().toTimeString().slice(0,5));
+        return `<div class="booking">
+                  <div class="meta">
+                    <div style="font-weight:700">👤 ${escapeHtml(b.nama)} • Meja ${escapeHtml(String(b.meja_id || '-'))}</div>
+                    <div style="font-size:12px;color:#64748b;">${isActive ? 'Sedang berjalan' : (b.status==='completed' ? 'Selesai' : 'Menunggu')}</div>
+                  </div>
+                  <div style="color:#64748b;">⏰ ${formatTime(b.jam_mulai)} - ${formatTime(b.jam_selesai)} • ⏱️ ${b.durasi} jam • 📅 ${formatDate(b.tanggal)}</div>
+                </div>`;
+      }).join('');
+    }
+
+    // ---------- UPDATE STATS ----------
+    function updateStats() {
+      document.getElementById('totalBooking').textContent = bookings ? bookings.length : 0;
+      const nowTime = new Date().toTimeString().slice(0,5);
+      const activeCount = (bookings || []).filter(b => b.status==='active' || (b.jam_mulai <= nowTime && b.jam_selesai > nowTime)).length;
+      document.getElementById('activeBooking').textContent = activeCount;
+    }
+
+    // ---------- CONTROL FUNCTIONS ----------
+    // Manual per meja -> POST /api/send-command { command: "ON1" }
+    async function manualControl(mejaId, action) {
+      try {
+        const command = `${action}${mejaId}`;
+        const res = await fetch(API_BASE + '/api/send-command', {
+          method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ command })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message || 'Perintah dikirim', 'success', 2200);
+          setTimeout(loadStatusMeja, 800);
+          setTimeout(loadLampStatus, 1000);
+        } else {
+          showToast(data.error || 'Gagal kirim perintah', 'error', 3000);
+        }
+      } catch(err) {
+        console.error('manualControl', err);
+        showToast('Gagal mengirim perintah ke server', 'error', 3000);
+      }
+    }
+
+    // Global control (butuh admin token) -> POST /api/lampu/control { action: "ON" }
+    async function controlLampu(action) {
+      try {
+        showToast('Mengirim perintah...', 'info', 1000);
+        const res = await fetch(API_BASE + '/api/lampu/control', {
+          method:'POST', headers:{
+            'Content-Type':'application/json',
+            'Authorization': adminToken || ''
+          }, body: JSON.stringify({ action })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message || 'Perintah sukses', 'success', 2000);
+          setTimeout(loadLampStatus, 1000);
+        } else if (res.status === 401) {
+          showToast('Sesi admin habis. Silakan login ulang.', 'error', 2000);
+          setTimeout(()=>logout(), 1200);
+        } else {
+          showToast(data.error || 'Gagal kontrol lampu', 'error', 2500);
+        }
+      } catch(err) {
+        console.error('controlLampu', err);
+        showToast('Gagal kontrol lampu', 'error', 2500);
+      }
+    }
+
+    // ---------- SYSTEM TIME ----------
+    function updateSystemTime() {
+      document.getElementById('systemTime').textContent = new Date().toLocaleTimeString();
+    }
+
+    // ---------- HELPERS ----------
+    function formatTime(t) { if (!t) return '--:--'; return t.slice(0,5); }
+    function formatDate(d) { try { const dt=new Date(d); return dt.toLocaleDateString('id-ID',{ day:'numeric', month:'short', year:'numeric' }); } catch { return d; } }
+    function escapeHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]); }
+
+  </script>
 </body>
 </html>

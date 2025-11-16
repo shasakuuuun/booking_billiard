@@ -1,331 +1,280 @@
-// Global variables
+// ====== GLOBAL STATE ======
 let bookings = [];
 let lampuStatus = false;
 
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Smart Billiard System loaded');
-    
-    // Load initial data
+// ====== INITIALIZE ======
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("🚀 Smart Billiard System Loaded");
+
     loadBookings();
     updateLampuStatus();
     updateCurrentTime();
-    
-    // Setup form submission
-    const bookingForm = document.getElementById('bookingForm');
+
+    const bookingForm = document.getElementById("bookingForm");
     if (bookingForm) {
-        bookingForm.addEventListener('submit', handleBookingSubmit);
+        bookingForm.addEventListener("submit", handleBookingSubmit);
     }
 
-    // Auto refresh every 30 seconds
+    // Refresh data tiap 30 detik
     setInterval(() => {
         loadBookings();
         updateLampuStatus();
-        updateCurrentTime();
     }, 30000);
 
-    // Update time every second
+    // Update jam tiap detik
     setInterval(updateCurrentTime, 1000);
-
-    console.log('✅ All event listeners attached');
 });
 
-// Load bookings from server
+// ====== FETCH BOOKING DATA ======
 async function loadBookings() {
     try {
-        console.log('📡 Loading bookings...');
-        const response = await fetch('/api/bookings');
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
+        const response = await fetch("/api/bookings");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
         bookings = await response.json();
-        console.log(`📋 Loaded ${bookings.length} bookings`);
-        
         displaySchedule();
-        
+
     } catch (error) {
-        console.error('❌ Error loading bookings:', error);
-        showAlert('Error loading bookings: ' + error.message, 'error');
+        showAlert("Error load bookings: " + error.message, "error");
     }
 }
 
-// Display schedule on main page
+// ====== TAMPILKAN JADWAL ======
 function displaySchedule() {
-    const scheduleList = document.getElementById('scheduleList');
+    const scheduleList = document.getElementById("scheduleList");
     if (!scheduleList) return;
 
     if (bookings.length === 0) {
         scheduleList.innerHTML = `
             <div class="empty-state">
                 <h3>📭 Belum ada booking hari ini</h3>
-                <p>Jadilah yang pertama booking di Genzyeeeh billiard!</p>
+                <p>Jadilah yang pertama booking!</p>
             </div>
         `;
         return;
     }
 
-    const currentTime = new Date().toTimeString().slice(0, 5);
-    const currentDateTime = new Date();
-    
-    scheduleList.innerHTML = bookings.map(booking => {
-        const isActive = booking.status === 'active' || 
-                        (booking.jam_mulai <= currentTime && booking.jam_selesai > currentTime);
-        const isCompleted = booking.status === 'completed' || booking.jam_selesai <= currentTime;
-        
-        let statusClass = 'status-pending';
-        let statusText = '⏱️ Menunggu';
-        
-        if (isCompleted) {
-            statusClass = 'status-completed';
-            statusText = '✅ Selesai';
-        } else if (isActive) {
-            statusClass = 'status-active';
-            statusText = '🔴 Sedang Main';
-        }
-        
-        const itemClass = isCompleted ? 'schedule-item completed' : 
-                         isActive ? 'schedule-item active' : 'schedule-item';
-        
-        return `
-            <div class="${itemClass}">
-                <h4>👤 ${booking.nama}</h4>
-                <p>⏰ ${formatTime(booking.jam_mulai)} - ${formatTime(booking.jam_selesai)}</p>
-                <p>⏱️ Durasi: ${booking.durasi} jam</p>
-                <p>📅 Tanggal: ${formatDate(booking.tanggal)}</p>
-                <span class="schedule-status ${statusClass}">${statusText}</span>
-            </div>
-        `;
-    }).join('');
+    const now = new Date().toTimeString().slice(0, 5);
+
+    scheduleList.innerHTML = bookings
+        .map((booking) => {
+            const isActive =
+                booking.status === "active" ||
+                (booking.jam_mulai <= now && booking.jam_selesai > now);
+
+            const isCompleted =
+                booking.status === "completed" ||
+                booking.jam_selesai <= now;
+
+            const status = isCompleted
+                ? { class: "status-completed", text: "✅ Selesai" }
+                : isActive
+                ? { class: "status-active", text: "🔴 Sedang Main" }
+                : { class: "status-pending", text: "⏱️ Menunggu" };
+
+            const itemClass = isCompleted
+                ? "schedule-item completed"
+                : isActive
+                ? "schedule-item active"
+                : "schedule-item";
+
+            return `
+                <div class="${itemClass}">
+                    <h4>👤 ${booking.nama}</h4>
+                    <p>⏰ ${formatTime(booking.jam_mulai)} - ${formatTime(
+                booking.jam_selesai
+            )}</p>
+                    <p>⏱️ Durasi: ${booking.durasi} jam</p>
+                    <p>📅 Tanggal: ${formatDate(booking.tanggal)}</p>
+                    <span class="schedule-status ${status.class}">
+                        ${status.text}
+                    </span>
+                </div>
+            `;
+        })
+        .join("");
 }
 
-// Update lampu status
+// ====== LAMPU STATUS ======
 async function updateLampuStatus() {
     try {
-        const response = await fetch('/api/lampu/status');
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
+        const response = await fetch("/api/lampu/status");
+        if (!response.ok) throw new Error("Gagal fetch status lampu");
+
         const lampuData = await response.json();
-        
-        if (lampuData.length > 0) {
-            const newStatus = lampuData[0].status_lampu;
-            
-            // Only update if status changed
-            if (newStatus !== lampuStatus) {
-                lampuStatus = newStatus;
-                console.log(`💡 Lampu status changed: ${lampuStatus ? 'ON' : 'OFF'}`);
-            }
-            
-            // Update status indicators
-            const statusText = lampuStatus ? '🔴 Lampu: ON' : '⚫ Lampu: OFF';
-            const lampuStatusEl = document.getElementById('lampuStatus');
-            
-            if (lampuStatusEl) {
-                lampuStatusEl.textContent = statusText;
-                const indicator = lampuStatusEl.parentElement;
-                if (lampuStatus) {
-                    indicator.classList.add('active');
-                } else {
-                    indicator.classList.remove('active');
-                }
-            }
+        if (!lampuData.length) return;
+
+        const newStatus = lampuData[0].status_lampu;
+        lampuStatus = newStatus;
+
+        const lampuStatusEl = document.getElementById("lampuStatus");
+
+        if (lampuStatusEl) {
+            lampuStatusEl.textContent = lampuStatus
+                ? "🔴 Lampu: ON"
+                : "⚫ Lampu: OFF";
+
+            lampuStatusEl.parentElement.classList.toggle(
+                "active",
+                lampuStatus
+            );
         }
     } catch (error) {
-        console.error('❌ Error updating lampu status:', error);
+        console.error("Lampu status error:", error);
     }
 }
 
-// Handle booking form submission
+// ====== HANDLE BOOKING FORM ======
 async function handleBookingSubmit(e) {
     e.preventDefault();
-    
-    console.log('📝 Submitting booking form...');
-    
+
     const formData = new FormData(e.target);
     const bookingData = {
-        nama: formData.get('nama').trim(),
-        jam_mulai: formData.get('jamMulai'),
-        durasi: parseInt(formData.get('durasi')),
-        meja_id: parseInt(formData.get('meja'))
+        nama: formData.get("nama").trim(),
+        jam_mulai: formData.get("jamMulai"),
+        durasi: Number(formData.get("durasi")),
+        meja_id: Number(formData.get("meja")),
     };
 
-    // Validasi input
+    // Validasi
     if (!bookingData.nama || !bookingData.jam_mulai || !bookingData.durasi) {
-        showAlert('❌ Semua field harus diisi!', 'error');
+        showAlert("❌ Semua field wajib diisi!", "error");
         return;
     }
 
-    // Validasi nama minimal 2 karakter
     if (bookingData.nama.length < 2) {
-        showAlert('❌ Nama minimal 2 karakter!', 'error');
+        showAlert("❌ Nama minimal 2 karakter!", "error");
         return;
     }
 
-    // Validasi waktu booking
+    // Cek waktu lewat
     const now = new Date();
     const bookingTime = new Date();
-    const [hours, minutes] = bookingData.jam_mulai.split(':');
-    bookingTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    
-    // Cek apakah booking untuk hari ini dan waktu sudah lewat
+    const [h, m] = bookingData.jam_mulai.split(":");
+    bookingTime.setHours(h, m, 0, 0);
+
     if (bookingTime < now) {
-        showAlert('❌ Tidak bisa booking untuk waktu yang sudah lewat!', 'error');
+        showAlert("❌ Tidak bisa booking waktu yang sudah lewat!", "error");
         return;
     }
 
-    // Cek konflik dengan booking yang sudah ada
-    const conflict = checkBookingConflict(bookingData.jam_mulai, bookingData.durasi);
+    // Cek bentrok
+    const conflict = checkBookingConflict(
+        bookingData.jam_mulai,
+        bookingData.durasi
+    );
     if (conflict) {
-        showAlert(`❌ Waktu bentrok dengan booking ${conflict.nama} (${conflict.jam_mulai}-${conflict.jam_selesai})!`, 'error');
+        showAlert(
+            `❌ Bentrok dengan booking ${conflict.nama} (${conflict.jam_mulai} - ${conflict.jam_selesai})`,
+            "error"
+        );
         return;
     }
 
+    // Kirim ke server
     try {
-        showAlert('⏳ Memproses booking...', 'info');
-        
-        const response = await fetch('/api/booking', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(bookingData)
+        showAlert("⏳ Memproses booking...", "info");
+
+        const response = await fetch("/api/booking", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(bookingData),
         });
 
         const result = await response.json();
-        
+
         if (response.ok) {
-            console.log('✅ Booking successful:', result);
-            showAlert(`🎉 Booking berhasil! Lampu akan otomatis nyala pada ${formatTime(bookingData.jam_mulai)}`, 'success');
-            
-            // Reset form
+            showAlert(
+                `🎉 Booking berhasil! Lampu akan otomatis nyala jam ${formatTime(
+                    bookingData.jam_mulai
+                )}`,
+                "success"
+            );
+
             e.target.reset();
-            
-            // Refresh booking list
-            setTimeout(() => {
-                loadBookings();
-            }, 1000);
-            
+            loadBookings();
         } else {
-            console.error('❌ Booking failed:', result);
-            showAlert(`❌ ${result.error || 'Booking gagal!'}`, 'error');
+            showAlert("❌ " + (result.error || "Booking gagal"), "error");
         }
-    } catch (error) {
-        console.error('❌ Error submitting booking:', error);
-        showAlert('❌ Error: Tidak bisa menghubungi server', 'error');
+    } catch (err) {
+        showAlert("❌ Tidak bisa menghubungi server", "error");
     }
 }
 
-// Check booking conflict
+// ====== CEK BENTROK BOOKING ======
 function checkBookingConflict(jamMulai, durasi) {
     const newStart = timeToMinutes(jamMulai);
-    const newEnd = newStart + (durasi * 60);
-    
-    return bookings.find(booking => {
-        if (booking.status === 'completed') return false;
-        
-        const existingStart = timeToMinutes(booking.jam_mulai);
-        const existingEnd = timeToMinutes(booking.jam_selesai);
-        
-        // Check overlap
-        return (newStart < existingEnd && newEnd > existingStart);
+    const newEnd = newStart + durasi * 60;
+
+    return bookings.find((b) => {
+        if (b.status === "completed") return false;
+
+        const start = timeToMinutes(b.jam_mulai);
+        const end = timeToMinutes(b.jam_selesai);
+
+        return newStart < end && newEnd > start;
     });
 }
 
-// Convert time to minutes for comparison
-function timeToMinutes(timeString) {
-    const [hours, minutes] = timeString.split(':').map(Number);
-    return hours * 60 + minutes;
+function timeToMinutes(t) {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
 }
 
-// Update current time display
+// ====== JAM REALTIME ======
 function updateCurrentTime() {
-    const currentTimeEl = document.getElementById('currentTime');
-    if (currentTimeEl) {
-        const now = new Date();
-        const timeString = now.toLocaleTimeString('id-ID', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
+    const el = document.getElementById("currentTime");
+    if (el) {
+        el.textContent = new Date().toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
         });
-        currentTimeEl.textContent = timeString;
     }
 }
 
-// Show alert messages
-function showAlert(message, type = 'info') {
-    console.log(`Alert [${type}]: ${message}`);
-    
-    // Remove existing alerts
-    const existingAlert = document.querySelector('.alert');
-    if (existingAlert) {
-        existingAlert.remove();
-    }
+// ====== ALERT ======
+function showAlert(message, type = "info") {
+    const container = document.querySelector(".booking-wrapper");
 
-    // Create new alert
-    const alert = document.createElement('div');
+    if (!container) return;
+
+    const old = container.querySelector(".alert");
+    if (old) old.remove();
+
+    const alert = document.createElement("div");
     alert.className = `alert alert-${type}`;
     alert.textContent = message;
 
-    // Insert alert at the top of container
-    const container = document.querySelector('.container');
-    const header = container.querySelector('header');
+    const header = container.querySelector("header");
     container.insertBefore(alert, header.nextSibling);
 
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (alert.parentNode) {
-            alert.remove();
-        }
-    }, 5000);
-
-    // Scroll to top to show alert
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => alert.remove(), 5000);
+    window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-// Utility function to format time
-function formatTime(timeString) {
-    if (!timeString) return '--:--';
-    
-    try {
-        const [hours, minutes] = timeString.split(':');
-        return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
-    } catch (error) {
-        console.error('Error formatting time:', error);
-        return timeString;
-    }
+// ====== FORMAT TIME/DATE ======
+function formatTime(t) {
+    if (!t) return "--:--";
+    const [h, m] = t.split(":");
+    return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
 }
 
-// Utility function to format date
-function formatDate(dateString) {
-    if (!dateString) return '--';
-    
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('id-ID', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-    } catch (error) {
-        console.error('Error formatting date:', error);
-        return dateString;
-    }
+function formatDate(d) {
+    if (!d) return "--";
+    return new Date(d).toLocaleDateString("id-ID", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+    });
 }
 
-
-
-
-// Debug function - can be called from browser console
-window.debugBilliard = function() {
-    console.log('🔍 Debug Info:');
-    console.log('Bookings:', bookings);
-    console.log('Lampu Status:', lampuStatus);
-    console.log('Current Time:', new Date().toTimeString().slice(0, 5));
+// ====== DEBUG ======
+window.debugBilliard = () => {
+    console.log({
+        bookings,
+        lampuStatus,
+        time: new Date().toTimeString(),
+    });
 };
-
-

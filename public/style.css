@@ -1,7 +1,12 @@
+/* RESET */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
 }
 
 body {
@@ -13,23 +18,24 @@ body {
     line-height: 1.6;
 }
 
-.container {
+/* MAIN WRAPPER (ganti dari .container agar tidak bentrok bootstrap) */
+.booking-wrapper {
     max-width: 900px;
     margin: 0 auto;
     padding: 20px;
 }
 
-/* Header Styles */
+/* HEADER */
 header {
-    background: rgba(255, 255, 255, 0.65); /* putih transparan */
+    background: rgba(255, 255, 255, 0.65);
     padding: 25px;
     border-radius: 20px;
     margin-bottom: 25px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    backdrop-filter: blur(8px);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(8px); /* efek blur di belakang */
 }
 
 header h1 {
@@ -45,7 +51,7 @@ header h1 {
     font-weight: bold;
     border: 2px solid #e2e8f0;
     font-size: 1.1em;
-    transition: all 0.3s ease;
+    transition: all 0.3s;
 }
 
 .status-indicator.active {
@@ -54,16 +60,15 @@ header h1 {
     border-color: #48bb78;
 }
 
-/* Section Styles */
-.booking-section, 
-.schedule-section, 
-.info-section {
-    background: rgba(255, 255, 255, 0.65); /* transparan */
+/* SECTIONS */
+.booking-section,
+.schedule-section {
+    background: rgba(255, 255, 255, 0.65);
     padding: 30px;
     border-radius: 20px;
     margin-bottom: 25px;
+    backdrop-filter: blur(8px);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(8px); /* biar elegan */
 }
 
 .booking-section h2,
@@ -73,7 +78,7 @@ header h1 {
     font-size: 1.5em;
 }
 
-/* Form Styles */
+/* FORM */
 .form-group {
     margin-bottom: 25px;
 }
@@ -86,27 +91,26 @@ header h1 {
     font-size: 1.1em;
 }
 
-.form-group input, 
+.form-group input,
 .form-group select {
     width: 100%;
     padding: 15px;
     border: 2px solid #e2e8f0;
     border-radius: 15px;
     font-size: 16px;
-    transition: all 0.3s ease;
     background: white;
+    transition: 0.3s;
 }
 
-.form-group input:focus, 
+.form-group input:focus,
 .form-group select:focus {
     outline: none;
     border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    transform: translateY(-2px);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
-/* Button Styles */
-.btn-submit, 
+/* BUTTONS */
+.btn-submit,
 .btn-admin {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -116,23 +120,19 @@ header h1 {
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
-    text-decoration: none;
     display: inline-block;
-    transition: all 0.3s ease;
+    text-decoration: none;
+    transition: 0.3s;
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
-.btn-submit:hover, 
+.btn-submit:hover,
 .btn-admin:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
 }
 
-.btn-submit:active {
-    transform: translateY(-1px);
-}
-
-/* Schedule Styles */
+/* CURRENT TIME BOX */
 .current-time {
     background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
     color: white;
@@ -144,18 +144,19 @@ header h1 {
     margin-bottom: 20px;
 }
 
+/* SCHEDULE ITEMS */
 .schedule-item {
     background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
     padding: 20px;
     border-radius: 15px;
-    margin-bottom: 15px;
     border-left: 5px solid #667eea;
-    transition: all 0.3s ease;
+    margin-bottom: 15px;
+    transition: 0.3s;
 }
 
 .schedule-item:hover {
     transform: translateX(5px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
 }
 
 .schedule-item.active {
@@ -173,24 +174,14 @@ header h1 {
 .schedule-item.completed {
     opacity: 0.6;
     border-left-color: #a0aec0;
-    background: linear-gradient(135deg, #f7fafc 0%, #e2e8f0 100%);
+    background: #f1f5f9;
 }
 
-.schedule-item h4 {
-    color: #2d3748;
-    margin-bottom: 5px;
-    font-size: 1.2em;
-}
-
-.schedule-item p {
-    color: #4a5568;
-    margin-bottom: 5px;
-}
-
+/* STATUS TAGS */
 .schedule-status {
-    font-weight: bold;
     padding: 5px 12px;
     border-radius: 20px;
+    font-weight: bold;
     display: inline-block;
     margin-top: 10px;
 }
@@ -207,35 +198,16 @@ header h1 {
 
 .status-completed {
     background: #e2e8f0;
-    color: #4a5568;
+    color: #475569;
 }
 
-/* Info Section */
-.info-section {
-    background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
-}
-
-.info-section h3 {
-    color: #2c5282;
-    margin-bottom: 15px;
-}
-
-.info-section ul {
-    list-style: none;
-}
-
-.info-section li {
-    padding: 8px 0;
-    color: #2d3748;
-}
-
-/* Admin Link */
+/* ADMIN LINK */
 .admin-link {
     text-align: center;
     margin-top: 30px;
 }
 
-/* Alert Styles */
+/* ALERTS */
 .alert {
     padding: 18px 24px;
     border-radius: 15px;
@@ -246,25 +218,25 @@ header h1 {
 }
 
 .alert-success {
-    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    background: #48bb78;
     color: white;
 }
 
 .alert-error {
-    background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+    background: #e53e3e;
     color: white;
 }
 
 .alert-info {
-    background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+    background: #3182ce;
     color: white;
 }
 
-/* Loading Animation */
+/* LOADING */
 .loading {
     text-align: center;
-    padding: 30px;
     color: #4a5568;
+    padding: 30px;
     font-style: italic;
 }
 
@@ -274,46 +246,22 @@ header h1 {
 }
 
 @keyframes loading {
-    0% { content: "."; }
-    33% { content: ".."; }
-    66% { content: "..."; }
+    0% { content: "." }
+    33% { content: ".." }
+    66% { content: "..." }
 }
 
-/* Empty State */
-.empty-state {
-    text-align: center;
-    padding: 40px;
-    color: #4a5568;
-}
-
-.empty-state h3 {
-    margin-bottom: 10px;
-    color: #2d3748;
-}
-
-/* Responsive Design */
+/* RESPONSIVE */
 @media (max-width: 768px) {
-    .container {
-        padding: 15px;
-    }
-    
     header {
         flex-direction: column;
         text-align: center;
     }
-    
     .status-indicator {
         margin-top: 15px;
     }
-    
     header h1 {
         font-size: 1.8em;
-    }
-    
-    .booking-section, 
-    .schedule-section, 
-    .info-section {
-        padding: 20px;
     }
 }
 
@@ -321,40 +269,8 @@ header h1 {
     header h1 {
         font-size: 1.5em;
     }
-    
-    .btn-submit, 
+    .btn-submit,
     .btn-admin {
         width: 100%;
-        text-align: center;
     }
-}
-
-/* Smooth Scrolling */
-html {
-    scroll-behavior: smooth;
-}
-
-.status-container {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  margin-top: 10px;
-}
-
-.meja-card {
-  background: #f9fafb;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 16px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-}
-
-.meja-card h3 {
-  margin: 0;
-  color: #1e293b;
-}
-
-.meja-card p {
-  margin: 5px 0;
-  color: #475569;
 }
