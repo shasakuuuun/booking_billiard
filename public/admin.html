@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin - Genzyeeeh Billiard</title>
+  <title>Admin - Genzyeeeh Billiard (Final B)</title>
   <style>
     /* ---------- RESET ---------- */
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,10 +29,7 @@
     }
     .main { margin-left: 260px; padding: 20px; }
 
-    .user {
-      display:flex; gap:12px; align-items:center; margin-bottom:18px;
-      border-bottom:1px solid #eef2f7; padding-bottom:12px;
-    }
+    .user { display:flex; gap:12px; align-items:center; margin-bottom:18px; border-bottom:1px solid #eef2f7; padding-bottom:12px; }
     .avatar { width:44px; height:44px; background:#2563eb; color:white; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700; }
     .username h3 { font-size:15px; margin-bottom:2px; }
     .username p { font-size:13px; color:#64748b; }
@@ -80,7 +77,7 @@
       position: fixed;
       right: 20px;
       top: 20px;
-      min-width:200px;
+      min-width:220px;
       padding:10px 14px;
       border-radius:8px;
       color:white;
@@ -88,7 +85,8 @@
       box-shadow: 0 6px 18px rgba(2,6,23,0.12);
       z-index: 9999;
       opacity:1;
-      transition: opacity .3s ease;
+      transition: opacity .3s ease, transform .2s ease;
+      transform: translateY(0);
     }
     .toast.info { background:#0ea5e9; }
     .toast.success { background:#059669; }
@@ -179,15 +177,18 @@
     <div id="lamp" class="section" style="display:none;">
       <div class="card" style="margin-bottom:12px;">
         <h3>🎛️ Manual Control</h3>
-        <p style="color:#64748b; margin:8px 0;">Kontrol manual untuk menyalakan/mematikan lampu meja.</p>
+        <p style="color:#64748b; margin:8px 0;">Kontrol manual untuk menyalakan/mematikan lampu meja. (Manual override tetap bekerja walau ada booking aktif)</p>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btn btn-success" onclick="manualControl(1,'ON')">🔴 Meja 1 ON</button>
-          <button class="btn btn-danger"  onclick="manualControl(1,'OFF')">⚫ Meja 1 OFF</button>
+          <button id="m1on" class="btn btn-success">🔴 Meja 1 ON</button>
+          <button id="m1off" class="btn btn-danger">⚫ Meja 1 OFF</button>
 
-          <button class="btn btn-success" onclick="manualControl(2,'ON')">🔴 Meja 2 ON</button>
-          <button class="btn btn-danger"  onclick="manualControl(2,'OFF')">⚫ Meja 2 OFF</button>
+          <button id="m2on" class="btn btn-success">🔴 Meja 2 ON</button>
+          <button id="m2off" class="btn btn-danger">⚫ Meja 2 OFF</button>
 
-          <button id="refreshData" class="btn btn-primary" onclick="loadAll()">🔄 Refresh</button>
+          <button id="globalOn" class="btn btn-primary">🔛 Semua ON</button>
+          <button id="globalOff" class="btn btn-primary">⭘ Semua OFF</button>
+
+          <button id="refreshData" class="btn btn-secondary">🔄 Refresh</button>
         </div>
       </div>
 
@@ -237,26 +238,37 @@
     </div>
   </div>
 
-  <!-- Toast container (dynamic) -->
+  <!-- Toast container -->
   <div id="toastRoot" aria-live="polite" aria-atomic="true"></div>
 
   <script>
-    // ---------- KONFIG ----------
-    const API_BASE = ''; // relatif ke server (tidak diubah)
-    const AUTO_REFRESH_MS = 60000; // 60s sesuai cron
+    /**
+     * Admin page (Versi B - final)
+     * Compatible with server.js (endpoints):
+     *  - GET  /api/bookings
+     *  - GET  /api/lampu/status
+     *  - GET  /api/status-meja
+     *  - POST /api/manual-control  { meja_id, action }  <-- preferred for manual per-meja (updates DB + pushes cmd)
+     *  - POST /api/lampu/control   { action } + Authorization header (token)
+     *  - POST /api/send-command    { command }  (optional)
+     *  - GET  /api/esp-command     (ESP polls)
+     */
+
+    const API_BASE = ''; // relatif -> cocok jika file diletakkan di public/ dari server
+    const AUTO_REFRESH_MS = 60000; // 60s
     let bookings = [];
     let lampuStatus = false;
     let adminToken = localStorage.getItem('adminToken') || null;
 
-    // ---------- INIT ----------
+    // ---- init ----
     document.addEventListener('DOMContentLoaded', () => {
-      // tampilkan tanggal
+      // tanggal
       const now = new Date();
       document.getElementById('currentDate').textContent = now.toLocaleDateString('id-ID', {
         weekday:'long', day:'numeric', month:'long', year:'numeric'
       });
 
-      // sidebar nav handler
+      // sidebar nav
       document.querySelectorAll('.nav .nav-item').forEach(n => {
         n.addEventListener('click', (e) => {
           document.querySelectorAll('.nav .nav-item').forEach(x=>x.classList.remove('active'));
@@ -266,16 +278,25 @@
         });
       });
 
+      // tombol manual
+      document.getElementById('m1on').addEventListener('click', ()=>manualControlBtn(1,'ON'));
+      document.getElementById('m1off').addEventListener('click', ()=>manualControlBtn(1,'OFF'));
+      document.getElementById('m2on').addEventListener('click', ()=>manualControlBtn(2,'ON'));
+      document.getElementById('m2off').addEventListener('click', ()=>manualControlBtn(2,'OFF'));
+      document.getElementById('refreshData').addEventListener('click', loadAll);
+      document.getElementById('globalOn').addEventListener('click', ()=>globalControl('ON'));
+      document.getElementById('globalOff').addEventListener('click', ()=>globalControl('OFF'));
+
       // logout
       document.getElementById('logoutBtn').addEventListener('click', logout);
 
-      // load data awal
       loadAll();
       setInterval(loadAll, AUTO_REFRESH_MS);
       setInterval(updateSystemTime, 1000);
+      showSection('dashboard');
     });
 
-    // ---------- NAV ----------
+    // ---- navigation ----
     function showSection(id) {
       if (!id) return;
       document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
@@ -284,99 +305,54 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // ---------- TOAST ----------
-    function showToast(message, type='info', timeout=3000) {
+    // ---- toasts ----
+    function showToast(msg, type='info', timeout=3000) {
       const root = document.getElementById('toastRoot');
       const d = document.createElement('div');
       d.className = 'toast ' + (type==='error' ? 'error' : type==='success' ? 'success' : 'info');
-      d.textContent = message;
+      d.textContent = msg;
       root.appendChild(d);
-      setTimeout(()=> { d.style.opacity = '0'; setTimeout(()=> d.remove(), 300); }, timeout);
+      setTimeout(()=> { d.style.opacity = '0'; d.style.transform = 'translateY(-8px)'; setTimeout(()=> d.remove(), 400); }, timeout);
     }
 
-    // ---------- AUTH ----------
+    // ---- auth / logout ----
     async function logout() {
       const token = adminToken;
       if (token) {
         try {
           await fetch(API_BASE + '/api/admin/logout', {
-            method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token })
+            method:'POST', headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ token })
           });
-        } catch(e) { console.warn('logout fail', e); }
+        } catch(e) { console.warn('logout error', e); }
       }
       localStorage.removeItem('adminToken');
       localStorage.removeItem('adminUsername');
       adminToken = null;
-      window.location.href = 'login.html';
+      showToast('Logout berhasil', 'success', 1200);
+      setTimeout(()=> window.location.href = 'login.html', 900);
     }
 
-    // ---------- LOAD ALL ----------
+    // ---- load all ----
     async function loadAll() {
-      await Promise.all([ loadBookings(), loadLampStatus(), loadStatusMeja() ]);
+      await Promise.all([loadBookings(), loadLampStatus(), loadStatusMeja()]);
       updateStats();
     }
 
-    // ---------- LOAD BOOKINGS ----------
+    // ---- bookings ----
     async function loadBookings() {
       try {
         const res = await fetch(API_BASE + '/api/bookings');
-        if (!res.ok) throw new Error('HTTP '+res.status);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         bookings = await res.json();
         displayAdminBookings();
         displayDetailedBookings();
       } catch (err) {
         console.error('Error loadBookings', err);
-        showToast('Gagal memuat bookings', 'error', 2500);
+        showToast('Gagal memuat bookings', 'error', 2000);
       }
     }
 
-    // ---------- LOAD LAMP STATUS ----------
-    async function loadLampStatus() {
-      try {
-        const res = await fetch(API_BASE + '/api/lampu/status');
-        if (!res.ok) throw new Error('HTTP '+res.status);
-        const data = await res.json();
-        if (Array.isArray(data) && data.length>0) {
-          lampuStatus = !!data[0].status_lampu;
-          const el = document.getElementById('adminLampuStatus');
-          el.textContent = lampuStatus ? 'ON' : 'OFF';
-          el.style.color = lampuStatus ? '#059669' : '#ef4444';
-          document.getElementById('updateTime').textContent = new Date().toLocaleTimeString();
-        }
-      } catch(err) {
-        console.error('loadLampStatus', err);
-        document.getElementById('serverStatus').textContent = '🔴 Connection Error';
-      }
-    }
-
-    // ---------- LOAD STATUS MEJA ----------
-    async function loadStatusMeja() {
-      try {
-        const res = await fetch(API_BASE + '/api/status-meja');
-        if (!res.ok) throw new Error('HTTP '+res.status);
-        const data = await res.json();
-        const container = document.getElementById('statusMeja');
-        container.innerHTML = '';
-        if (!Array.isArray(data) || data.length===0) {
-          container.innerHTML = '<div class="booking">Tidak ada data meja</div>';
-          return;
-        }
-        data.forEach(meja => {
-          const card = document.createElement('div');
-          card.className = 'meja-card';
-          const statusLampu = meja.status_lampu ? '🟢 Nyala' : '⚫ Mati';
-          const statusBooking = meja.status_booking === 'active' ? 'Sedang Dipakai' : 'Kosong';
-          card.innerHTML = `<h4 style="margin-bottom:6px">${escapeHtml(meja.nama_meja)}</h4>
-                            <div style="color:#475569;font-size:14px"><b>Lampu:</b> ${statusLampu}</div>
-                            <div style="color:#64748b;font-size:13px;margin-top:6px"><b>Status:</b> ${statusBooking}</div>`;
-          container.appendChild(card);
-        });
-      } catch(err) {
-        console.error('loadStatusMeja', err);
-      }
-    }
-
-    // ---------- DISPLAY BOOKING LIST ----------
     function displayAdminBookings() {
       const listEl = document.getElementById('adminBookingList');
       if (!bookings || bookings.length===0) {
@@ -385,8 +361,7 @@
       }
       const nowTime = new Date().toTimeString().slice(0,5);
       listEl.innerHTML = bookings.map(b => {
-        const start = b.jam_mulai;
-        const end = b.jam_selesai;
+        const start = b.jam_mulai, end = b.jam_selesai;
         const isActive = b.status==='active' || (start <= nowTime && end > nowTime);
         const isCompleted = b.status==='completed' || end <= nowTime;
         const statusBadge = isCompleted ? `<span class="badge completed">✅ Completed</span>`
@@ -409,7 +384,7 @@
         return;
       }
       el.innerHTML = bookings.map(b => {
-        const start = b.jam_mulai; const end = b.jam_selesai;
+        const start = b.jam_mulai, end = b.jam_selesai;
         const isActive = b.status==='active' || (start <= new Date().toTimeString().slice(0,5) && end > new Date().toTimeString().slice(0,5));
         return `<div class="booking">
                   <div class="meta">
@@ -421,7 +396,123 @@
       }).join('');
     }
 
-    // ---------- UPDATE STATS ----------
+    // ---- lamp status ----
+    async function loadLampStatus() {
+      try {
+        const res = await fetch(API_BASE + '/api/lampu/status');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length>0) {
+          lampuStatus = !!data[0].status_lampu;
+          const el = document.getElementById('adminLampuStatus');
+          el.textContent = lampuStatus ? 'ON' : 'OFF';
+          el.style.color = lampuStatus ? '#059669' : '#ef4444';
+          document.getElementById('updateTime').textContent = new Date().toLocaleTimeString();
+        }
+      } catch(err) {
+        console.error('loadLampStatus', err);
+        document.getElementById('serverStatus').textContent = '🔴 Connection Error';
+      }
+    }
+
+    // ---- status meja ----
+    async function loadStatusMeja() {
+      try {
+        const res = await fetch(API_BASE + '/api/status-meja');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const container = document.getElementById('statusMeja');
+        container.innerHTML = '';
+        if (!Array.isArray(data) || data.length===0) {
+          container.innerHTML = '<div class="booking">Tidak ada data meja</div>';
+          return;
+        }
+        data.forEach(meja => {
+          const card = document.createElement('div');
+          card.className = 'meja-card';
+          const statusLampu = meja.status_lampu ? '🟢 Nyala' : '⚫ Mati';
+          const statusBooking = meja.status_booking === 'active' ? 'Sedang Dipakai' : 'Kosong';
+          card.innerHTML = `<h4 style="margin-bottom:6px">${escapeHtml(meja.nama_meja)}</h4>
+                            <div style="color:#475569;font-size:14px"><b>Lampu:</b> ${statusLampu}</div>
+                            <div style="color:#64748b;font-size:13px;margin-top:6px"><b>Status:</b> ${statusBooking}</div>`;
+          container.appendChild(card);
+        });
+      } catch(err) {
+        console.error('loadStatusMeja', err);
+      }
+    }
+
+    // ---- manual control (button handler) ----
+    async function manualControlBtn(mejaId, action) {
+      // Use endpoint /api/manual-control which updates DB and pushes command
+      try {
+        showToast('Mengirim perintah manual...', 'info', 900);
+        const res = await fetch(API_BASE + '/api/manual-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meja_id: mejaId, action })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message || 'Perintah dikirim', 'success', 1700);
+          // refresh cepat
+          setTimeout(()=> { loadStatusMeja(); loadLampStatus(); }, 800);
+        } else {
+          showToast(data.error || 'Gagal kirim perintah', 'error', 2800);
+        }
+      } catch (err) {
+        console.error('manualControl error', err);
+        showToast('Gagal mengirim perintah ke server', 'error', 2800);
+      }
+    }
+
+    // ---- global control (admin) ----
+    async function globalControl(action) {
+      // needs Authorization header = token
+      if (!adminToken) {
+        showToast('Perlu login admin. Redirecting to login...', 'error', 1800);
+        setTimeout(()=> window.location.href = 'login.html', 900);
+        return;
+      }
+      try {
+        showToast('Mengirim perintah global...', 'info', 900);
+        const res = await fetch(API_BASE + '/api/lampu/control', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': adminToken
+          },
+          body: JSON.stringify({ action })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(data.message || 'Global command sent', 'success', 1700);
+          setTimeout(()=> loadLampStatus(), 900);
+        } else {
+          if (res.status === 401) {
+            showToast('Session invalid. Silakan login ulang.', 'error', 2000);
+            setTimeout(()=> { localStorage.removeItem('adminToken'); window.location.href = 'login.html'; }, 1000);
+          } else {
+            showToast(data.error || 'Gagal kontrol global', 'error', 2500);
+          }
+        }
+      } catch(err) {
+        console.error('globalControl err', err);
+        showToast('Gagal mengirim perintah global', 'error', 2500);
+      }
+    }
+
+    // ---- system time ----
+    function updateSystemTime() {
+      const el = document.getElementById('systemTime');
+      if (el) el.textContent = new Date().toLocaleTimeString();
+    }
+
+    // ---- helpers ----
+    function formatTime(t) { if (!t) return '--:--'; return t.slice(0,5); }
+    function formatDate(d) { try { const dt=new Date(d); return dt.toLocaleDateString('id-ID',{ day:'numeric', month:'short', year:'numeric' }); } catch { return d; } }
+    function escapeHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]); }
+
     function updateStats() {
       document.getElementById('totalBooking').textContent = bookings ? bookings.length : 0;
       const nowTime = new Date().toTimeString().slice(0,5);
@@ -429,64 +520,12 @@
       document.getElementById('activeBooking').textContent = activeCount;
     }
 
-    // ---------- CONTROL FUNCTIONS ----------
-    // Manual per meja -> POST /api/send-command { command: "ON1" }
-    async function manualControl(mejaId, action) {
-      try {
-        const command = `${action}${mejaId}`;
-        const res = await fetch(API_BASE + '/api/send-command', {
-          method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ command })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          showToast(data.message || 'Perintah dikirim', 'success', 2200);
-          setTimeout(loadStatusMeja, 800);
-          setTimeout(loadLampStatus, 1000);
-        } else {
-          showToast(data.error || 'Gagal kirim perintah', 'error', 3000);
-        }
-      } catch(err) {
-        console.error('manualControl', err);
-        showToast('Gagal mengirim perintah ke server', 'error', 3000);
-      }
-    }
-
-    // Global control (butuh admin token) -> POST /api/lampu/control { action: "ON" }
-    async function controlLampu(action) {
-      try {
-        showToast('Mengirim perintah...', 'info', 1000);
-        const res = await fetch(API_BASE + '/api/lampu/control', {
-          method:'POST', headers:{
-            'Content-Type':'application/json',
-            'Authorization': adminToken || ''
-          }, body: JSON.stringify({ action })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          showToast(data.message || 'Perintah sukses', 'success', 2000);
-          setTimeout(loadLampStatus, 1000);
-        } else if (res.status === 401) {
-          showToast('Sesi admin habis. Silakan login ulang.', 'error', 2000);
-          setTimeout(()=>logout(), 1200);
-        } else {
-          showToast(data.error || 'Gagal kontrol lampu', 'error', 2500);
-        }
-      } catch(err) {
-        console.error('controlLampu', err);
-        showToast('Gagal kontrol lampu', 'error', 2500);
-      }
-    }
-
-    // ---------- SYSTEM TIME ----------
-    function updateSystemTime() {
-      document.getElementById('systemTime').textContent = new Date().toLocaleTimeString();
-    }
-
-    // ---------- HELPERS ----------
-    function formatTime(t) { if (!t) return '--:--'; return t.slice(0,5); }
-    function formatDate(d) { try { const dt=new Date(d); return dt.toLocaleDateString('id-ID',{ day:'numeric', month:'short', year:'numeric' }); } catch { return d; } }
-    function escapeHtml(s) { if (!s) return ''; return String(s).replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]); }
-
+    // Expose debug
+    window.debugBilliard = () => {
+      console.log('Bookings:', bookings);
+      console.log('Lamp status:', lampuStatus);
+      console.log('Token:', adminToken ? 'present' : 'none');
+    };
   </script>
 </body>
 </html>

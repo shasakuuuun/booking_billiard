@@ -1,20 +1,17 @@
+
 // #include <WiFi.h>
 // #include <HTTPClient.h>
 
-// // ================== KONFIGURASI WIFI ==================
+// // ================== WIFI CONFIG ==================
 // const char* ssid = "POCO X3 Pro";
 // const char* password = "pakeajaskin";
 
-// // ================== KONFIGURASI SERVER ==================
-// String serverUrl = "http://10.173.30.29:3000";  // IP laptop
+// // ================== SERVER CONFIG ==================
+// String serverUrl = "http://172.23.240.29:3000"; // IP laptop / server
 
-// // ================== PIN RELAY ==================
-// #define RELAY1 18   // Meja 1
-// #define RELAY2 19   // Meja 2
-
-// // ================== STATUS RELAY ==================
-// bool lamp1State = false;
-// bool lamp2State = false;
+// // ================== RELAY PINS ==================
+// #define RELAY1 18  // Meja 1
+// #define RELAY2 19  // Meja 2
 
 // // ================== SETUP ==================
 // void setup() {
@@ -23,14 +20,13 @@
 //   pinMode(RELAY1, OUTPUT);
 //   pinMode(RELAY2, OUTPUT);
 
-//   // relay aktif LOW (HIGH = mati)
+//   // Relay aktif LOW
 //   digitalWrite(RELAY1, HIGH);
 //   digitalWrite(RELAY2, HIGH);
 
-//   Serial.println("Menghubungkan ke WiFi...");
+//   Serial.println("📡 Connecting WiFi...");
 //   WiFi.begin(ssid, password);
 
-//   // Tunggu sampai terhubung
 //   int retry = 0;
 //   while (WiFi.status() != WL_CONNECTED && retry < 30) {
 //     delay(500);
@@ -39,73 +35,78 @@
 //   }
 
 //   if (WiFi.status() == WL_CONNECTED) {
-//     Serial.println("\n✅ Terhubung ke WiFi!");
-//     Serial.print("IP ESP32: ");
+//     Serial.println("\n✅ WiFi Connected!");
+//     Serial.print("IP: ");
 //     Serial.println(WiFi.localIP());
 //   } else {
-//     Serial.println("\n❌ Gagal konek WiFi, reboot dalam 5 detik...");
-//     delay(5000);
+//     Serial.println("\n❌ WiFi Failed! Restarting...");
+//     delay(3000);
 //     ESP.restart();
 //   }
 // }
 
-// // ================== LOOP ==================
+// // ================== MAIN LOOP ==================
 // void loop() {
 //   if (WiFi.status() != WL_CONNECTED) {
 //     reconnectWiFi();
 //   }
 
-//   checkServerCommand();
-//   delay(3000); // jeda agar tidak terlalu sering polling
+//   checkCommandForMeja(1);
+//   delay(300);
+
+//   checkCommandForMeja(2);
+//   delay(1500);
 // }
 
-// // ================== CEK PERINTAH DARI SERVER ==================
-// void checkServerCommand() {
+// // ======================================================
+// // CHECK COMMAND per MEJA → /api/esp-command?meja=1
+// // ======================================================
+// void checkCommandForMeja(int mejaID) {
 //   HTTPClient http;
-//   String url = serverUrl + "/api/esp-command";
+
+//   String url = serverUrl + "/api/esp-command?meja=" + String(mejaID);
 
 //   http.begin(url);
-//   http.setTimeout(3000); // timeout 3 detik
-
 //   int httpCode = http.GET();
 
 //   if (httpCode == 200) {
-//     String command = http.getString();
-//     command.trim();
+//     String cmd = http.getString();
+//     cmd.trim();
 
-//     if (command.length() > 0) {
-//       Serial.print("📩 Perintah dari server: ");
-//       Serial.println(command);
-
-//       if (command == "ON1") {
-//         digitalWrite(RELAY1, LOW);
-//         lamp1State = true;
-//         Serial.println("💡 Meja 1 NYALA");
-//       } else if (command == "OFF1") {
-//         digitalWrite(RELAY1, HIGH);
-//         lamp1State = false;
-//         Serial.println("⚫ Meja 1 MATI");
-//       } else if (command == "ON2") {
-//         digitalWrite(RELAY2, LOW);
-//         lamp2State = true;
-//         Serial.println("💡 Meja 2 NYALA");
-//       } else if (command == "OFF2") {
-//         digitalWrite(RELAY2, HIGH);
-//         lamp2State = false;
-//         Serial.println("⚫ Meja 2 MATI");
-//       }
+//     if (cmd.length() > 0) {
+//       Serial.print("📨 Command meja ");
+//       Serial.print(mejaID);
+//       Serial.print(": ");
+//       Serial.println(cmd);
 //     }
-//   } else {
-//     Serial.print("❌ Gagal ambil perintah. Kode: ");
-//     Serial.println(httpCode);
+
+//     if (cmd == "ON1") {
+//       digitalWrite(RELAY1, LOW);
+//       Serial.println("💡 Meja 1 NYALA");
+//     } 
+//     else if (cmd == "OFF1") {
+//       digitalWrite(RELAY1, HIGH);
+//       Serial.println("⚫ Meja 1 MATI");
+//     }
+//     else if (cmd == "ON2") {
+//       digitalWrite(RELAY2, LOW);
+//       Serial.println("💡 Meja 2 NYALA");
+//     }
+//     else if (cmd == "OFF2") {
+//       digitalWrite(RELAY2, HIGH);
+//       Serial.println("⚫ Meja 2 MATI");
+//     }
 //   }
 
 //   http.end();
 // }
 
-// // ================== RECONNECT WIFI ==================
+// // ======================================================
+// // WIFI RECONNECT
+// // ======================================================
 // void reconnectWiFi() {
-//   Serial.println("🔄 WiFi terputus, mencoba reconnect...");
+//   Serial.println("🔄 Reconnecting WiFi...");
+
 //   WiFi.disconnect();
 //   WiFi.begin(ssid, password);
 
@@ -117,11 +118,9 @@
 //   }
 
 //   if (WiFi.status() == WL_CONNECTED) {
-//     Serial.println("\n✅ WiFi reconnect berhasil!");
-//     Serial.print("IP ESP32: ");
-//     Serial.println(WiFi.localIP());
+//     Serial.println("\n✅ WiFi Reconnected!");
 //   } else {
-//     Serial.println("\n❌ Gagal reconnect WiFi, restart ESP...");
+//     Serial.println("\n❌ Failed! Restarting ESP...");
 //     ESP.restart();
 //   }
 // }
