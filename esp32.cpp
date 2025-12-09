@@ -3,8 +3,8 @@
 // #include <HTTPClient.h>
 
 // // ================== WIFI CONFIG ==================
-// const char* ssid = "POCO X3 Pro";
-// const char* password = "pakeajaskin";
+// const char* ssid = "";
+// const char* password = "";
 
 // // ================== SERVER CONFIG ==================
 // String serverUrl = "*************************"; // IP laptop / server
