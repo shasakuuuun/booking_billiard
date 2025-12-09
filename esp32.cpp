@@ -7,7 +7,7 @@
 // const char* password = "pakeajaskin";
 
 // // ================== SERVER CONFIG ==================
-// String serverUrl = "http://172.23.240.29:3000"; // IP laptop / server
+// String serverUrl = "*************************"; // IP laptop / server
 
 // // ================== RELAY PINS ==================
 // #define RELAY1 18  // Meja 1
