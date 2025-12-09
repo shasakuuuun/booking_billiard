@@ -1,6 +1,6 @@
-// ======================================================
-//  SMART BILLIARD SERVER - FINAL BOSSSS
-// ======================================================
+//====================================================================
+ //SMART BILLIARD SERVER - FINAL MIDNIGHT + RESET MEJA FIX (2025)
+//====================================================================
 
 const express = require("express");
 const mysql = require("mysql2/promise");
@@ -16,13 +16,10 @@ const PORT = process.env.PORT || 3000;
 // LOG SYSTEM
 // ======================================================
 function log(msg) {
-    const timestamp = new Date().toISOString();
-    const line = `[${timestamp}] ${msg}\n`;
-    console.log(line.trim());
-    fs.appendFileSync("./logs/server.log", line, "utf8");
+    const ts = new Date().toISOString();
+    console.log(`[${ts}] ${msg}`);
 }
 
-if (!fs.existsSync("logs")) fs.mkdirSync("logs");
 
 // ======================================================
 // MIDDLEWARE
@@ -63,22 +60,16 @@ async function initDB() {
         user: process.env.DB_USER || "root",
         password: process.env.DB_PASSWORD || "",
         database: process.env.DB_DATABASE || "billiard_booking",
-        connectionLimit: 15,
-        enableKeepAlive: true,
-        keepAliveInitialDelay: 0
+        connectionLimit: 20
     });
-
-    log("✅ MySQL Connected (POOL MODE)");
+    log("✅ MySQL Connected (POOL)");
 }
 initDB();
 
 // ======================================================
-// ESP COMMAND QUEUE (FINAL)
+// ESP COMMAND QUEUE
 // ======================================================
-let commandQueue = {
-    1: "",
-    2: ""
-};
+let commandQueue = { 1: "", 2: "" };
 
 function pushCommand(cmd) {
     const meja = Number(cmd.replace(/\D/g, ""));
@@ -89,7 +80,7 @@ function pushCommand(cmd) {
 }
 
 // ======================================================
-// API - BOOKINGS
+// API — BOOKINGS
 // ======================================================
 app.get("/api/bookings", async (req, res) => {
     try {
@@ -116,17 +107,13 @@ app.post("/api/booking", async (req, res) => {
         const end = new Date(start.getTime() + durasi * 3600000);
         const jam_selesai = end.toTimeString().slice(0, 5);
 
-        const sql = `
-            INSERT INTO bookings (nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi)
-            VALUES (?, ?, ?, ?, CURDATE(), ?)
-        `;
+        const [result] = await db.query(
+            `INSERT INTO bookings (nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi)
+             VALUES (?, ?, ?, ?, CURDATE(), ?)`,
+            [nama, meja_id, jam_mulai, jam_selesai, durasi]
+        );
 
-        const [result] = await db.query(sql, [
-            nama, meja_id, jam_mulai, jam_selesai, durasi
-        ]);
-
-        log(`📅 Booking → Meja ${meja_id} (${jam_mulai}-${jam_selesai})`);
-
+        log(`📅 Booking → Meja ${meja_id} (${jam_mulai} - ${jam_selesai})`);
         res.json({ message: "Booking berhasil!", booking_id: result.insertId });
 
     } catch (err) {
@@ -136,7 +123,7 @@ app.post("/api/booking", async (req, res) => {
 });
 
 // ======================================================
-// API - STATUS LAMPU
+// API — STATUS LAMPU
 // ======================================================
 app.get("/api/lampu/status", async (req, res) => {
     try {
@@ -148,75 +135,91 @@ app.get("/api/lampu/status", async (req, res) => {
 });
 
 // ======================================================
-// ADMIN LOGIN
+// API — STATUS MEJA (RESET FIX)
 // ======================================================
-app.post("/api/admin/login", (req, res) => {
-    const { username, password } = req.body;
-
-    if (username === ADMIN.username && password === ADMIN.password) {
-        const token = makeToken();
-        adminSessions.add(token);
-        log(`🔐 ADMIN LOGIN → ${username}`);
-        return res.json({ message: "Login berhasil", token, username });
-    }
-
-    res.status(401).json({ error: "Username atau password salah" });
-});
-
-app.post("/api/admin/logout", (req, res) => {
-    const { token } = req.body;
-    if (token) adminSessions.delete(token);
-    res.json({ message: "Logout berhasil" });
-});
-
-// ======================================================
-// MANUAL GLOBAL CONTROL
-// ======================================================
-app.post("/api/lampu/control", requireAdmin, async (req, res) => {
+app.get("/api/status-meja", async (req, res) => {
     try {
-        const { action } = req.body;
+        const [rows] = await db.query(`
+            SELECT 
+                m.id,
+                m.nama_meja,
+                m.status_lampu,
+                COALESCE(
+                    (SELECT status FROM bookings 
+                     WHERE meja_id = m.id
+                     AND tanggal = CURDATE()
+                     ORDER BY jam_mulai ASC LIMIT 1),
+                    'idle'
+                ) AS status_booking
+            FROM meja_billiard m
+            ORDER BY m.id ASC
+        `);
 
-        if (!["ON", "OFF"].includes(action))
-            return res.status(400).json({ error: "Invalid action" });
+        res.json(rows);
 
-        const status = action === "ON" ? 1 : 0;
-
-        await db.query("UPDATE meja_billiard SET status_lampu = ?", [status]);
-
-        // Kirim per meja
-        pushCommand(`${action}1`);
-        pushCommand(`${action}2`);
-
-        log(`🧠 GLOBAL CONTROL → ${action}`);
-
-        res.json({ message: `Semua lampu ${action}` });
     } catch (err) {
-        log("❌ Manual global error: " + err);
+        log("❌ status-meja error: " + err);
         res.status(500).json({ error: err.message });
     }
 });
 
 // ======================================================
-// MANUAL PER MEJA
+// API — RESET MEJA (FIX 100% WORKING)
+// ======================================================
+app.post("/api/reset-meja", async (req, res) => {
+    try {
+        await db.query("UPDATE meja_billiard SET status_lampu = 0");
+
+        await db.query(`
+            UPDATE bookings 
+            SET status = 'completed'
+            WHERE tanggal = CURDATE()
+        `);
+
+        commandQueue[1] = "OFF1";
+        commandQueue[2] = "OFF2";
+
+        log("♻ RESET MEJA → Semua lampu OFF, booking completed");
+
+        res.json({ message: "Berhasil reset semua meja!" });
+
+    } catch (err) {
+        log("❌ RESET ERROR: " + err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ======================================================
+// ADMIN LOGIN
+// ======================================================
+app.post("/api/admin/login", (req, res) => {
+    const { username, password } = req.body;
+    if (username === ADMIN.username && password === ADMIN.password) {
+        const token = makeToken();
+        adminSessions.add(token);
+        log(`🔐 ADMIN LOGIN → ${username}`);
+        return res.json({ message: "Login berhasil", token });
+    }
+    res.status(401).json({ error: "Username atau password salah" });
+});
+
+// ======================================================
+// MANUAL CONTROL
 // ======================================================
 app.post("/api/manual-control", async (req, res) => {
     try {
         const { meja_id, action } = req.body;
 
-        if (!meja_id || !action)
-            return res.status(400).json({ error: "Data tidak lengkap" });
-
         const status = action === "ON" ? 1 : 0;
 
-        await db.query("UPDATE meja_billiard SET status_lampu = ? WHERE id = ?", [
-            status, meja_id
+        await db.query("UPDATE meja_billiard SET status_lampu=? WHERE id=?", [
+            status, meja_id,
         ]);
 
         pushCommand(`${action}${meja_id}`);
 
         log(`💡 MANUAL → Meja ${meja_id} ${action}`);
-
-        res.json({ message: `Lampu Meja ${meja_id} ${action}` });
+        res.json({ message: `Lampu meja ${meja_id} ${action}` });
 
     } catch (err) {
         log("❌ Manual meja error: " + err);
@@ -225,31 +228,38 @@ app.post("/api/manual-control", async (req, res) => {
 });
 
 // ======================================================
-// ESP COMMAND — FINAL STABLE VERSION
+// GLOBAL CONTROL
+// ======================================================
+app.post("/api/lampu/control", requireAdmin, async (req, res) => {
+    try {
+        const { action } = req.body;
+        const status = action === "ON" ? 1 : 0;
+
+        await db.query("UPDATE meja_billiard SET status_lampu=?", [status]);
+
+        pushCommand(`${action}1`);
+        pushCommand(`${action}2`);
+
+        log(`🧠 GLOBAL CONTROL → ${action}`);
+        res.json({ message: `Semua lampu ${action}` });
+
+    } catch (err) {
+        log("❌ Global control error: " + err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ======================================================
+// ESP COMMAND
 // ======================================================
 app.get("/api/esp-command", (req, res) => {
     try {
         const meja = parseInt(req.query.meja || "0");
-
-        if (!meja) {
-            log("⚠ ESP mengakses tanpa parameter meja");
-            return res.send("");
-        }
-
         const cmd = commandQueue[meja] || "";
 
-        log(`🔎 ESP CHECK → meja ${meja}, command: "${cmd}"`);
-
-        if (cmd.startsWith("ON") || cmd.startsWith("OFF")) {
-            log(`📤 SEND TO ESP → ${cmd}`);
-
-            setTimeout(() => {
-                if (commandQueue[meja] === cmd) {
-                    log(`♻ CLEAR COMMAND → ${cmd}`);
-                    commandQueue[meja] = "";
-                }
-            }, 200);
-
+        if (cmd) {
+            log(`📤 SEND → ${cmd}`);
+            commandQueue[meja] = "";
             return res.send(cmd);
         }
 
@@ -257,68 +267,70 @@ app.get("/api/esp-command", (req, res) => {
 
     } catch (err) {
         log("❌ ESP COMMAND ERROR: " + err);
-        return res.send("");
+        res.send("");
     }
 });
 
 // ======================================================
-// ESP HEARTBEAT
-// ======================================================
-app.post("/api/esp-heartbeat", (req, res) => {
-    const { status, ip } = req.body;
-    log(`💓 HEARTBEAT → ${status} (${ip})`);
-    res.json({ message: "OK" });
-});
-
-// ======================================================
-// CRON JOB — SETIAP 1 MENIT
+// CRON JOB — AUTO LAMPU (MIDNIGHT OK)
 // ======================================================
 cron.schedule("* * * * *", async () => {
     try {
         const now = new Date();
-        const currentTime = now.toTimeString().slice(0, 5);
-        const currentDate = now.toISOString().slice(0, 10);
+        const t = now.toTimeString().slice(0, 5);
+        const d = now.toISOString().slice(0, 10);
 
-        log(`⏱ CRON CHECK → ${currentDate} ${currentTime}`);
+        log(`⏱ CRON CHECK → ${d} ${t}`);
 
         const [mejaList] = await db.query("SELECT * FROM meja_billiard ORDER BY id ASC");
 
         for (const meja of mejaList) {
-            const [booking] = await db.query(
-                `SELECT * FROM bookings
-                 WHERE tanggal = ?
-                 AND meja_id = ?
-                 AND jam_mulai <= ?
-                 AND jam_selesai > ?
-                 AND status != 'completed'`,
-                [currentDate, meja.id, currentTime, currentTime]
+            
+            const [bks] = await db.query(
+                `SELECT * FROM bookings 
+                 WHERE meja_id=? AND tanggal=? AND status!='completed'`,
+                [meja.id, d]
             );
 
-            if (booking.length > 0) {
-                log(`💡 AUTO ON → Meja ${meja.id}`);
+            let aktif = false;
+            let activeId = null;
 
-                pushCommand(`ON${meja.id}`);
+            for (const b of bks) {
+                const start = b.jam_mulai;
+                const end = b.jam_selesai;
 
-                await db.query(`UPDATE meja_billiard SET status_lampu = 1 WHERE id=?`, [meja.id]);
+                let active =
+                    start < end
+                        ? (t >= start && t < end)
+                        : (t >= start || t < end); // lewat tengah malam
 
-                for (const b of booking) {
-                    await db.query(`UPDATE bookings SET status='active' WHERE id=?`, [b.id]);
+                if (active) {
+                    aktif = true;
+                    activeId = b.id;
+                    break;
                 }
+            }
 
+            if (aktif) {
+                pushCommand(`ON${meja.id}`);
+                await db.query("UPDATE meja_billiard SET status_lampu=1 WHERE id=?", [meja.id]);
+                await db.query("UPDATE bookings SET status='active' WHERE id=?", [activeId]);
+
+                log(`💡 AUTO ON → Meja ${meja.id}`);
             } else {
-                log(`⚫ AUTO OFF → Meja ${meja.id}`);
-
                 pushCommand(`OFF${meja.id}`);
-
-                await db.query(`UPDATE meja_billiard SET status_lampu = 0 WHERE id=?`, [meja.id]);
+                await db.query("UPDATE meja_billiard SET status_lampu=0 WHERE id=?", [meja.id]);
 
                 await db.query(
                     `UPDATE bookings SET status='completed'
                      WHERE meja_id=? AND tanggal=? AND jam_selesai <= ?`,
-                    [meja.id, currentDate, currentTime]
+                    [meja.id, d, t]
                 );
+
+                log(`⚫ AUTO OFF → Meja ${meja.id}`);
             }
         }
+
     } catch (err) {
         log("❌ CRON ERROR: " + err);
     }
@@ -329,5 +341,4 @@ cron.schedule("* * * * *", async () => {
 // ======================================================
 app.listen(PORT, () => {
     log(`🚀 SERVER READY → http://localhost:${PORT}`);
-    log(`🔐 ADMIN → admin / billiard123`);
 });
