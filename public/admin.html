@@ -103,6 +103,12 @@
 const API = "";
 let adminToken = localStorage.getItem("adminToken");
 
+if (!adminToken) {
+  alert("Session admin habis, silakan login ulang");
+  location.href = "login.html";
+}
+
+
 // ---------------- TOAST ----------------
 function toast(msg,type="info",time=2000){
   const box=document.createElement("div");

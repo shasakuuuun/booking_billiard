@@ -50,6 +50,47 @@ function requireAdmin(req, res, next) {
 }
 
 // ======================================================
+// ADMIN LOGIN API (FRONTEND COMPATIBLE)
+// ======================================================
+app.post("/api/admin/login", (req, res) => {
+    const { username, password } = req.body;
+
+    if (
+        username === ADMIN.username &&
+        password === ADMIN.password
+    ) {
+        const token = makeToken();
+        adminSessions.add(token);
+
+        log("🔐 ADMIN LOGIN SUCCESS");
+
+        return res.json({
+            token,
+            username
+        });
+    }
+
+    log("❌ ADMIN LOGIN FAILED");
+    res.status(401).json({ error: "Username atau password salah" });
+});
+
+// ======================================================
+// ADMIN VERIFY TOKEN
+// ======================================================
+app.post("/api/admin/verify", (req, res) => {
+    const { token } = req.body;
+
+    if (adminSessions.has(token)) {
+        return res.json({ valid: true });
+    }
+
+    res.status(401).json({ error: "Token tidak valid" });
+});
+
+
+
+
+// ======================================================
 // MYSQL CONNECTION
 // ======================================================
 let db;
