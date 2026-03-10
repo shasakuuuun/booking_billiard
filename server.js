@@ -1,5 +1,5 @@
 //====================================================================
-// SMART BILLIARD SERVER - FINAL (MIDNIGHT + RESET + SHAKE SENSOR)
+// SMART BILLIARD SERVER - FINAL (MIDNIGHT + RESET + SHAKE SENSOR + KODE AKTIVASI)
 //====================================================================
 
 const express = require("express");
@@ -19,7 +19,6 @@ function log(msg) {
     const ts = new Date().toISOString();
     console.log(`[${ts}] ${msg}`);
 }
-
 
 // ======================================================
 // MIDDLEWARE
@@ -41,6 +40,13 @@ function makeToken() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+// ✨ BARU — Generate kode aktivasi format: BIL-001-2025
+function makeKodeAktivasi(bookingId) {
+    const pad = String(bookingId).padStart(3, "0");
+    const year = new Date().getFullYear();
+    return `BIL-${pad}-${year}`;
+}
+
 function requireAdmin(req, res, next) {
     const token = req.headers["authorization"];
     if (!token || !adminSessions.has(token)) {
@@ -55,19 +61,11 @@ function requireAdmin(req, res, next) {
 app.post("/api/admin/login", (req, res) => {
     const { username, password } = req.body;
 
-    if (
-        username === ADMIN.username &&
-        password === ADMIN.password
-    ) {
+    if (username === ADMIN.username && password === ADMIN.password) {
         const token = makeToken();
         adminSessions.add(token);
-
         log("🔐 ADMIN LOGIN SUCCESS");
-
-        return res.json({
-            token,
-            username
-        });
+        return res.json({ token, username });
     }
 
     log("❌ ADMIN LOGIN FAILED");
@@ -79,16 +77,9 @@ app.post("/api/admin/login", (req, res) => {
 // ======================================================
 app.post("/api/admin/verify", (req, res) => {
     const { token } = req.body;
-
-    if (adminSessions.has(token)) {
-        return res.json({ valid: true });
-    }
-
+    if (adminSessions.has(token)) return res.json({ valid: true });
     res.status(401).json({ error: "Token tidak valid" });
 });
-
-
-
 
 // ======================================================
 // MYSQL CONNECTION
@@ -105,6 +96,17 @@ async function initDB() {
     });
 
     log("✅ MySQL Connected (POOL)");
+
+    // ✨ BARU — Auto-migrate: tambah kolom kode_aktivasi kalau belum ada
+    try {
+        await db.query(`
+            ALTER TABLE bookings 
+            ADD COLUMN IF NOT EXISTS kode_aktivasi VARCHAR(20) DEFAULT NULL
+        `);
+        log("✅ Kolom kode_aktivasi siap");
+    } catch (e) {
+        log("ℹ️ kode_aktivasi: " + e.message);
+    }
 }
 initDB();
 
@@ -155,11 +157,94 @@ app.post("/api/booking", async (req, res) => {
             [nama, meja_id, jam_mulai, jam_selesai, durasi]
         );
 
-        log(`📅 Booking → Meja ${meja_id} (${jam_mulai} - ${jam_selesai})`);
-        res.json({ message: "Booking berhasil!", booking_id: result.insertId });
+        // ✨ BARU — Generate dan simpan kode aktivasi
+        const bookingId = result.insertId;
+        const kodeAktivasi = makeKodeAktivasi(bookingId);
+
+        await db.query(
+            `UPDATE bookings SET kode_aktivasi = ? WHERE id = ?`,
+            [kodeAktivasi, bookingId]
+        );
+
+        log(`📅 Booking → Meja ${meja_id} (${jam_mulai} - ${jam_selesai}) | Kode: ${kodeAktivasi}`);
+
+        // ✨ BARU — Response sekarang include data lengkap untuk struk
+        res.json({
+            message: "Booking berhasil!",
+            booking_id: bookingId,
+            kode_aktivasi: kodeAktivasi,
+            nama,
+            meja_id,
+            jam_mulai,
+            jam_selesai,
+            durasi
+        });
 
     } catch (err) {
         log("❌ Add booking: " + err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ======================================================
+// ✨ BARU — API AKTIVASI KODE (Customer Telat)
+// ======================================================
+app.post("/api/aktivasi", async (req, res) => {
+    try {
+        const { kode } = req.body;
+
+        if (!kode) return res.status(400).json({ error: "Kode tidak boleh kosong" });
+
+        // Cari booking berdasarkan kode hari ini yang belum selesai
+        const [rows] = await db.query(`
+            SELECT * FROM bookings
+            WHERE kode_aktivasi = ?
+              AND tanggal = CURDATE()
+              AND status != 'completed'
+            LIMIT 1
+        `, [kode.trim().toUpperCase()]);
+
+        if (!rows.length) {
+            return res.status(404).json({
+                error: "Kode tidak ditemukan atau booking sudah selesai"
+            });
+        }
+
+        const booking = rows[0];
+        const now = new Date().toTimeString().slice(0, 5);
+
+        // Cek apakah sudah melewati jam mulai
+        if (now < booking.jam_mulai) {
+            return res.status(400).json({
+                error: `Booking belum waktunya. Jadwal mulai: ${booking.jam_mulai}`
+            });
+        }
+
+        // Nyalakan lampu meja
+        pushCommand(`ON${booking.meja_id}`);
+        await db.query(
+            "UPDATE meja_billiard SET status_lampu = 1 WHERE id = ?",
+            [booking.meja_id]
+        );
+        await db.query(
+            "UPDATE bookings SET status = 'active' WHERE id = ?",
+            [booking.id]
+        );
+
+        // Reset timer sensor agar tidak langsung auto-off lagi
+        lastShake[booking.meja_id] = Date.now();
+
+        log(`🔑 AKTIVASI KODE → ${kode} | Meja ${booking.meja_id} ON`);
+
+        res.json({
+            message: `✅ Lampu Meja ${booking.meja_id} berhasil dinyalakan!`,
+            meja_id: booking.meja_id,
+            nama: booking.nama,
+            jam_selesai: booking.jam_selesai
+        });
+
+    } catch (err) {
+        log("❌ Aktivasi error: " + err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -190,7 +275,8 @@ app.get("/api/status-meja", async (req, res) => {
                     (SELECT status FROM bookings 
                      WHERE meja_id = m.id
                      AND tanggal = CURDATE()
-                     ORDER BY jam_mulai ASC LIMIT 1),
+                     AND status = 'active'
+                     LIMIT 1),
                     'idle'
                 ) AS status_booking
             FROM meja_billiard m
@@ -222,7 +308,6 @@ app.post("/api/reset-meja", async (req, res) => {
         commandQueue[2] = "OFF2";
 
         log("♻ RESET MEJA → Semua lampu OFF, booking completed");
-
         res.json({ message: "Berhasil reset semua meja!" });
 
     } catch (err) {
@@ -232,9 +317,38 @@ app.post("/api/reset-meja", async (req, res) => {
 });
 
 // ======================================================
+// ✨ BARU — GLOBAL LAMPU CONTROL (endpoint yang tadinya hilang)
+// ======================================================
+app.post("/api/lampu/control", requireAdmin, async (req, res) => {
+    try {
+        const { action } = req.body;
+
+        if (!["ON", "OFF"].includes(action)) {
+            return res.status(400).json({ error: "Action harus ON atau OFF" });
+        }
+
+        const status = action === "ON" ? 1 : 0;
+        await db.query("UPDATE meja_billiard SET status_lampu = ?", [status]);
+
+        commandQueue[1] = `${action}1`;
+        commandQueue[2] = `${action}2`;
+
+        log(`💡 GLOBAL ${action} → Semua meja`);
+        res.json({ message: `Semua lampu ${action}` });
+
+    } catch (err) {
+        log("❌ Global control error: " + err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ======================================================
 // SENSOR GETAR API
 // ======================================================
 let lastShake = { 1: Date.now(), 2: Date.now() };
+
+// ✨ BARU — Timeout diubah ke 15 menit (dari 60 detik)
+const SHAKE_TIMEOUT_MS = 15 * 60 * 1000;
 
 app.post("/api/shake", async (req, res) => {
     try {
@@ -245,7 +359,7 @@ app.post("/api/shake", async (req, res) => {
         }
 
         lastShake[meja_id] = Date.now();
-        console.log("🔔 GETAR TERDETEKSI → Meja", meja_id);
+        log("🔔 GETAR TERDETEKSI → Meja " + meja_id);
 
         pushCommand(`ON${meja_id}`);
         await db.query("UPDATE meja_billiard SET status_lampu=1 WHERE id=?", [meja_id]);
@@ -304,7 +418,7 @@ app.get("/api/esp-command", (req, res) => {
 });
 
 // ======================================================
-// CRON — BOOKING AUTO ON/OFF
+// CRON — BOOKING AUTO ON/OFF (setiap menit)
 // ======================================================
 cron.schedule("* * * * *", async () => {
     try {
@@ -347,7 +461,6 @@ cron.schedule("* * * * *", async () => {
                 pushCommand(`ON${meja.id}`);
                 await db.query("UPDATE meja_billiard SET status_lampu=1 WHERE id=?", [meja.id]);
                 await db.query("UPDATE bookings SET status='active' WHERE id=?", [activeId]);
-
                 log(`💡 AUTO ON → Meja ${meja.id}`);
             } else {
                 pushCommand(`OFF${meja.id}`);
@@ -369,7 +482,9 @@ cron.schedule("* * * * *", async () => {
 });
 
 // ======================================================
-// CRON SENSOR GETAR — auto OFF jika 60 detik tidak bergerak
+// ✨ CRON SENSOR GETAR — Auto OFF jika 15 menit tidak ada getaran
+// Berlaku saat ada booking aktif → customer diasumsikan belum datang
+// Customer bisa nyalakan lagi pakai kode aktivasi dari struk
 // ======================================================
 cron.schedule("* * * * * *", async () => {
     const now = Date.now();
@@ -377,13 +492,35 @@ cron.schedule("* * * * * *", async () => {
     for (let meja = 1; meja <= 2; meja++) {
         const diff = now - lastShake[meja];
 
-        if (diff > 60000) {
-            console.log(`⚫ SENSOR AUTO OFF → Meja ${meja}`);
+        if (diff > SHAKE_TIMEOUT_MS) {
+            try {
+                const t = new Date().toTimeString().slice(0, 5);
+                const d = new Date().toISOString().slice(0, 10);
 
-            pushCommand(`OFF${meja}`);
-            await db.query("UPDATE meja_billiard SET status_lampu=0 WHERE id=?", [meja]);
+                // Hanya matikan kalau ada booking aktif
+                const [bks] = await db.query(`
+                    SELECT id FROM bookings
+                    WHERE meja_id = ? AND tanggal = ?
+                      AND status = 'active'
+                      AND jam_mulai <= ? AND jam_selesai > ?
+                    LIMIT 1
+                `, [meja, d, t, t]);
 
-            lastShake[meja] = now;
+                if (bks.length > 0) {
+                    log(`⚫ TIMEOUT 15 MENIT → Meja ${meja} (customer belum datang, gunakan kode aktivasi)`);
+                    pushCommand(`OFF${meja}`);
+                    await db.query(
+                        "UPDATE meja_billiard SET status_lampu=0 WHERE id=?",
+                        [meja]
+                    );
+                    // Status booking TETAP 'active' agar bisa aktivasi pakai kode
+                }
+
+                lastShake[meja] = now;
+
+            } catch (err) {
+                log("❌ SENSOR CRON ERROR: " + err);
+            }
         }
     }
 });

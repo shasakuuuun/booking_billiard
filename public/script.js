@@ -103,7 +103,6 @@ async function updateLampuStatus() {
         const lampuData = await response.json();
         if (!Array.isArray(lampuData) || lampuData.length === 0) return;
 
-        // Assuming meja_billiard index 0 adalah meja 1 (UI menampilkan global lamp status)
         const newStatus = lampuData[0].status_lampu;
         lampuStatus = Boolean(newStatus);
 
@@ -187,12 +186,11 @@ async function handleBookingSubmit(e) {
         const result = await response.json();
 
         if (response.ok) {
-            showAlert(
-                `🎉 Booking berhasil! Lampu akan otomatis nyala jam ${formatTime(bookingData.jam_mulai)}`,
-                "success"
-            );
-
             e.target.reset();
+
+            // ✨ BARU — Tampilkan struk booking dengan kode aktivasi
+            showStruk(result);
+
             // refresh data
             await loadBookings();
             await updateLampuStatus();
@@ -210,7 +208,6 @@ function checkBookingConflict(jamMulai, durasi, mejaId) {
     const newStart = timeToMinutes(jamMulai);
     const newEnd = newStart + durasi * 60;
 
-    // Hanya cek booking untuk meja yang sama dan yang belum completed
     return bookings.find((b) => {
         if (b.status === "completed") return false;
         if (Number(b.meja_id) !== Number(mejaId)) return false;
@@ -218,7 +215,6 @@ function checkBookingConflict(jamMulai, durasi, mejaId) {
         const start = timeToMinutes(b.jam_mulai);
         const end = timeToMinutes(b.jam_selesai);
 
-        // Overlap check: newStart < end && newEnd > start
         return newStart < end && newEnd > start;
     });
 }
@@ -240,15 +236,12 @@ function updateCurrentTime() {
     }
 }
 
-// ====== ALERT (lebih robust) ======
+// ====== ALERT ======
 function showAlert(message, type = "info") {
-    // prefer container .booking-wrapper, fallback ke .container atau body
     let container = document.querySelector(".booking-wrapper") || document.querySelector(".container") || document.body;
 
-    // jika container adalah body, buatkan wrapper di atas header
     const header = container.querySelector ? container.querySelector("header") : null;
 
-    // remove previous
     const old = container.querySelector ? container.querySelector(".alert") : null;
     if (old) old.remove();
 
@@ -269,8 +262,214 @@ function showAlert(message, type = "info") {
         if (alert && alert.parentNode) alert.remove();
     }, 5000);
 
-    // scroll ke atas untuk terlihat
     window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ======================================================
+// ✨ BARU — STRUK BOOKING
+// ======================================================
+function showStruk(data) {
+    // Hapus modal lama kalau ada
+    const old = document.getElementById("modalStruk");
+    if (old) old.remove();
+
+    const tanggal = new Date().toLocaleDateString("id-ID", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+    });
+
+    const modal = document.createElement("div");
+    modal.id = "modalStruk";
+    modal.innerHTML = `
+        <div class="struk-overlay" onclick="tutupStruk()"></div>
+        <div class="struk-modal">
+            <div id="strukContent">
+                <div class="struk-header">
+                    <h2>🎱 Genzyeeeh Billiard</h2>
+                    <p>Bukti Booking Resmi</p>
+                    <hr>
+                </div>
+                <div class="struk-body">
+                    <div class="struk-row">
+                        <span>Nama</span>
+                        <span>${escapeHtml(data.nama)}</span>
+                    </div>
+                    <div class="struk-row">
+                        <span>Meja</span>
+                        <span>Meja ${data.meja_id}</span>
+                    </div>
+                    <div class="struk-row">
+                        <span>Tanggal</span>
+                        <span>${tanggal}</span>
+                    </div>
+                    <div class="struk-row">
+                        <span>Jam Mulai</span>
+                        <span>${formatTime(data.jam_mulai)}</span>
+                    </div>
+                    <div class="struk-row">
+                        <span>Jam Selesai</span>
+                        <span>${formatTime(data.jam_selesai)}</span>
+                    </div>
+                    <div class="struk-row">
+                        <span>Durasi</span>
+                        <span>${data.durasi} Jam</span>
+                    </div>
+                    <hr>
+                    <div class="struk-kode">
+                        <p>🔑 Kode Aktivasi Anda:</p>
+                        <h1>${escapeHtml(data.kode_aktivasi)}</h1>
+                        <small>
+                            Simpan kode ini! Gunakan jika Anda terlambat datang.<br>
+                            Lampu otomatis mati jika tidak ada aktivitas selama 15 menit.
+                        </small>
+                    </div>
+                </div>
+                <div class="struk-footer">
+                    <small>Terima kasih telah booking di Genzyeeeh Billiard! 🎱</small>
+                </div>
+            </div>
+            <div class="struk-actions">
+                <button onclick="printStruk()" class="btn-print">🖨️ Print Struk</button>
+                <button onclick="tutupStruk()" class="btn-tutup">✕ Tutup</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+function tutupStruk() {
+    const modal = document.getElementById("modalStruk");
+    if (modal) modal.remove();
+}
+
+function printStruk() {
+    const content = document.getElementById("strukContent").innerHTML;
+    const win = window.open("", "_blank", "width=420,height=650");
+    win.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Struk Booking - Genzyeeeh Billiard</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body {
+                    font-family: 'Courier New', monospace;
+                    padding: 24px;
+                    max-width: 320px;
+                    margin: 0 auto;
+                    color: #1a202c;
+                }
+                .struk-header { text-align: center; margin-bottom: 14px; }
+                .struk-header h2 { font-size: 18px; }
+                .struk-header p { font-size: 12px; color: #718096; margin-top: 4px; }
+                hr { border: none; border-top: 1px dashed #a0aec0; margin: 12px 0; }
+                .struk-row {
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 4px 0;
+                    font-size: 13px;
+                }
+                .struk-row span:first-child { color: #718096; }
+                .struk-row span:last-child { font-weight: 700; }
+                .struk-kode {
+                    text-align: center;
+                    margin: 16px 0 10px;
+                }
+                .struk-kode p {
+                    font-size: 12px;
+                    color: #4a5568;
+                    margin-bottom: 8px;
+                }
+                .struk-kode h1 {
+                    font-size: 26px;
+                    font-weight: 900;
+                    letter-spacing: 4px;
+                    border: 2px dashed #2563eb;
+                    color: #2563eb;
+                    padding: 8px 14px;
+                    display: inline-block;
+                    border-radius: 8px;
+                }
+                .struk-kode small {
+                    display: block;
+                    font-size: 11px;
+                    color: #718096;
+                    margin-top: 8px;
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                }
+                .struk-footer {
+                    text-align: center;
+                    font-size: 11px;
+                    color: #a0aec0;
+                    margin-top: 14px;
+                    font-family: Arial, sans-serif;
+                }
+            </style>
+        </head>
+        <body>
+            ${content}
+            <script>
+                window.onload = function() {
+                    window.print();
+                    setTimeout(function() { window.close(); }, 500);
+                };
+            <\/script>
+        </body>
+        </html>
+    `);
+    win.document.close();
+}
+
+// ======================================================
+// ✨ BARU — AKTIVASI KODE (Customer Telat)
+// ======================================================
+async function aktivasiKode() {
+    const input = document.getElementById("inputKodeAktivasi");
+    const kode = input ? input.value.trim().toUpperCase() : "";
+
+    if (!kode) {
+        showAlert("❌ Masukkan kode aktivasi dulu!", "error");
+        return;
+    }
+
+    // Validasi format dasar BIL-XXX-YYYY
+    const formatValid = /^BIL-\d{3}-\d{4}$/.test(kode);
+    if (!formatValid) {
+        showAlert("❌ Format kode salah. Contoh: BIL-001-2025", "error");
+        return;
+    }
+
+    try {
+        showAlert("⏳ Mengaktifkan lampu...", "info");
+
+        const response = await fetch("/api/aktivasi", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kode })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showAlert(
+                `🎉 ${result.message} Selesai jam ${formatTime(result.jam_selesai)}`,
+                "success"
+            );
+            if (input) input.value = "";
+            await updateLampuStatus();
+            await loadBookings();
+        } else {
+            showAlert("❌ " + result.error, "error");
+        }
+
+    } catch (err) {
+        console.error("aktivasi error:", err);
+        showAlert("❌ Tidak bisa menghubungi server", "error");
+    }
 }
 
 // ====== FORMAT TIME/DATE ======
@@ -297,7 +496,13 @@ function formatDate(d) {
 // ====== HELPERS ======
 function escapeHtml(s) {
     if (!s) return "";
-    return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    return String(s).replace(/[&<>"']/g, (m) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    }[m]));
 }
 
 // ====== DEBUG ======

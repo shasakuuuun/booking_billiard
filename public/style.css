@@ -274,3 +274,150 @@ header h1 {
         width: 100%;
     }
 }
+
+
+/* ======================================================
+   AKTIVASI SECTION
+====================================================== */
+.aktivasi-section {
+    background: rgba(255, 255, 255, 0.65);
+    padding: 28px 30px;
+    border-radius: 20px;
+    margin-bottom: 25px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    border-left: 5px solid #f6ad55;
+}
+.aktivasi-section h2 { color: #4a5568; font-size: 1.5em; margin-bottom: 10px; }
+.aktivasi-desc { color: #718096; font-size: 0.95em; margin-bottom: 18px; line-height: 1.6; }
+.aktivasi-form { display: flex; gap: 12px; align-items: center; }
+.aktivasi-form input {
+    flex: 1;
+    padding: 14px 18px;
+    border: 2px solid #e2e8f0;
+    border-radius: 15px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-align: center;
+    background: white;
+    transition: 0.3s;
+    font-family: 'Courier New', monospace;
+}
+.aktivasi-form input:focus {
+    outline: none;
+    border-color: #f6ad55;
+    box-shadow: 0 0 0 3px rgba(246, 173, 85, 0.25);
+}
+.btn-aktivasi {
+    background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%);
+    color: white;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 15px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: 0.3s;
+    box-shadow: 0 4px 15px rgba(237, 137, 54, 0.4);
+}
+.btn-aktivasi:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(237, 137, 54, 0.6); }
+
+/* ======================================================
+   MODAL STRUK BOOKING
+====================================================== */
+.struk-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+.struk-modal {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 20px;
+    padding: 28px;
+    width: 380px;
+    max-width: 92vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 1001;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    font-family: 'Courier New', monospace;
+}
+.struk-header { text-align: center; margin-bottom: 14px; }
+.struk-header h2 { font-size: 20px; color: #1a202c; margin-bottom: 4px; }
+.struk-header p { color: #718096; font-size: 13px; }
+.struk-body hr { border: none; border-top: 1px dashed #cbd5e0; margin: 12px 0; }
+.struk-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 14px;
+    color: #2d3748;
+}
+.struk-row span:first-child { color: #718096; font-size: 13px; }
+.struk-row span:last-child { font-weight: 700; }
+.struk-kode { text-align: center; margin: 18px 0 12px; }
+.struk-kode p { font-size: 13px; color: #4a5568; margin-bottom: 10px; font-family: 'Segoe UI', sans-serif; }
+.struk-kode h1 {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 5px;
+    color: #2563eb;
+    border: 2px dashed #2563eb;
+    padding: 10px 16px;
+    display: inline-block;
+    border-radius: 12px;
+    background: #eff6ff;
+}
+.struk-kode small {
+    display: block;
+    font-size: 11.5px;
+    color: #718096;
+    margin-top: 10px;
+    font-family: 'Segoe UI', sans-serif;
+    line-height: 1.6;
+}
+.struk-footer { text-align: center; font-size: 11px; color: #a0aec0; margin-top: 10px; font-family: 'Segoe UI', sans-serif; }
+.struk-actions { display: flex; gap: 10px; margin-top: 20px; }
+.btn-print {
+    flex: 1;
+    padding: 13px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: 0.2s;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35);
+}
+.btn-print:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-tutup {
+    padding: 13px 20px;
+    background: #f1f5f9;
+    color: #475569;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-tutup:hover { background: #e2e8f0; }
+
+@media (max-width: 768px) {
+    .aktivasi-form { flex-direction: column; }
+    .btn-aktivasi { width: 100%; }
+}
+@media (max-width: 480px) {
+    .struk-modal { padding: 20px; }
+    .struk-kode h1 { font-size: 22px; letter-spacing: 3px; }
+}

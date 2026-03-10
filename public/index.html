@@ -4,15 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🎱 Smart Billiard Booking</title>
-
-    <!-- CSS -->
     <link rel="stylesheet" href="style.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-
 <body>
     <div class="booking-wrapper">
-        
+
         <!-- HEADER -->
         <header class="booking-header">
             <h1 class="title">🎱 Genzyeeeh Billiard Booking</h1>
@@ -24,19 +21,15 @@
         <!-- BOOKING FORM -->
         <section class="booking-section">
             <h2>📅 Form Booking</h2>
-
             <form id="bookingForm">
-                
                 <div class="form-group">
                     <label for="nama">👤 Nama Customer:</label>
                     <input type="text" id="nama" name="nama" required placeholder="Masukkan nama Anda">
                 </div>
-
                 <div class="form-group">
                     <label for="jamMulai">⏰ Jam Mulai:</label>
                     <input type="time" id="jamMulai" name="jamMulai" required>
                 </div>
-
                 <div class="form-group">
                     <label for="durasi">⏱️ Durasi Main:</label>
                     <select id="durasi" name="durasi" required>
@@ -48,7 +41,6 @@
                         <option value="5">5 Jam</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label for="meja">🎱 Pilih Meja:</label>
                     <select id="meja" name="meja" required>
@@ -57,31 +49,43 @@
                         <option value="2">Meja 2</option>
                     </select>
                 </div>
-
                 <button type="submit" class="btn-submit">Book Sekarang!</button>
             </form>
+        </section>
+
+        <!-- ✨ BARU — AKTIVASI KODE -->
+        <section class="aktivasi-section">
+            <h2>🔑 Aktivasi Lampu</h2>
+            <p class="aktivasi-desc">
+                Terlambat datang dan lampu sudah mati? Masukkan kode aktivasi dari struk booking Anda.
+            </p>
+            <div class="aktivasi-form">
+                <input
+                    type="text"
+                    id="inputKodeAktivasi"
+                    placeholder="Contoh: BIL-001-2025"
+                    maxlength="12"
+                    oninput="this.value = this.value.toUpperCase()"
+                    onkeydown="if(event.key === 'Enter') aktivasiKode()"
+                >
+                <button onclick="aktivasiKode()" class="btn-aktivasi">
+                    💡 Aktifkan
+                </button>
+            </div>
         </section>
 
         <!-- TODAY SCHEDULE -->
         <section class="schedule-section">
             <h2>📋 Jadwal Booking Hari Ini</h2>
-
             <div class="current-time">
                 Waktu Sekarang: <span id="currentTime">--:--</span>
             </div>
-
             <div id="scheduleList">
                 <div class="loading">Loading jadwal...</div>
             </div>
         </section>
 
-        <!-- ADMIN PANEL LINK -->
-        <!-- <div class="admin-link">
-            <a href="login.html" class="btn-admin">Admin Panel</a>
-        </div> -->
     </div>
-
-    <!-- JS -->
     <script src="script.js"></script>
 </body>
 </html>
