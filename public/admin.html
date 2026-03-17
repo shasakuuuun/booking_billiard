@@ -3,97 +3,387 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin - Genzyeeeh Billiard FINAL</title>
+  <title>Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Inter,Arial;background:#f7fafc;color:#0f172a}
-    .wrap{max-width:1200px;margin:20px auto;padding:16px}
-    .sidebar{position:fixed;left:0;top:0;bottom:0;width:240px;background:#fff;
-      border-right:1px solid #e6eef8;padding:20px;overflow:auto}
-    .main{margin-left:260px;padding:20px}
-    .user{display:flex;gap:12px;align-items:center;margin-bottom:18px;
-      border-bottom:1px solid #eef2f7;padding-bottom:12px}
-    .avatar{width:44px;height:44px;background:#2563eb;color:#fff;border-radius:8px;
-      display:flex;justify-content:center;align-items:center;font-weight:700}
-    .nav{margin-top:18px;display:flex;flex-direction:column;gap:8px}
-    .nav a{padding:10px;border-radius:8px;cursor:pointer;text-decoration:none;
-      color:#475569}
-    .nav a.active,.nav a:hover{background:#f1f5f9;color:#1e3a8a}
-    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-    .btn{padding:10px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:600}
-    .btn-primary{background:#2563eb;color:#fff}
-    .btn-success{background:#059669;color:#fff}
-    .btn-danger{background:#ef4444;color:#fff}
-    .btn-secondary{background:#f1f5f9;color:#475569}
-    .card{background:#fff;border:1px solid #e6eef8;border-radius:10px;padding:16px;margin-bottom:16px}
-    .booking{padding:12px;border:1px solid #eef2f7;border-radius:8px;background:#fff;margin-bottom:10px}
-    #statusMeja{display:flex;gap:12px;flex-wrap:wrap}
-    .meja-card{border:1px solid #eef2f7;border-radius:8px;padding:12px;width:calc(50% - 10px);background:#fff}
-    .toast{position:fixed;right:20px;top:20px;padding:10px 14px;border-radius:8px;
-      min-width:200px;color:#fff;font-weight:600;z-index:9999;box-shadow:0 6px 18px rgba(0,0,0,.15)}
-    .toast.success{background:#059669}.toast.error{background:#ef4444}.toast.info{background:#0284c7}
-    @media(max-width:900px){.sidebar{position:relative;width:100%}.main{margin-left:0}.meja-card{width:100%}}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #0f172a; }
+
+    /* SIDEBAR */
+    .sidebar {
+      position: fixed; left: 0; top: 0; bottom: 0; width: 240px;
+      background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%);
+      padding: 24px 16px; overflow: auto; z-index: 100;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+    }
+    .sidebar-logo {
+      text-align: center; margin-bottom: 28px; padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+    }
+    .sidebar-logo h2 { color: #fff; font-size: 1.1em; margin-top: 8px; }
+    .sidebar-logo p { color: rgba(255,255,255,0.6); font-size: 0.75em; margin-top: 2px; }
+    .avatar-big {
+      width: 56px; height: 56px; background: rgba(255,255,255,0.2);
+      border-radius: 12px; display: flex; justify-content: center;
+      align-items: center; font-size: 1.6em; margin: 0 auto 8px;
+    }
+    .nav { display: flex; flex-direction: column; gap: 4px; }
+    .nav-item {
+      padding: 11px 14px; border-radius: 10px; cursor: pointer;
+      text-decoration: none; color: rgba(255,255,255,0.7);
+      font-size: 0.9em; font-weight: 500; display: flex; align-items: center; gap: 10px;
+      transition: all 0.2s;
+    }
+    .nav-item:hover, .nav-item.active {
+      background: rgba(255,255,255,0.15); color: #fff;
+    }
+    .nav-item.active { background: rgba(255,255,255,0.2); color: #fff; font-weight: 600; }
+    .nav-section {
+      font-size: 0.7em; color: rgba(255,255,255,0.4);
+      text-transform: uppercase; letter-spacing: 1px;
+      padding: 14px 14px 6px; font-weight: 600;
+    }
+
+    /* MAIN */
+    .main { margin-left: 240px; padding: 24px; min-height: 100vh; }
+
+    /* TOP BAR */
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 24px; background: #fff;
+      padding: 16px 24px; border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .topbar h2 { font-size: 1.4em; color: #1e3a8a; font-weight: 700; }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .time-badge {
+      background: #f1f5f9; padding: 8px 16px; border-radius: 20px;
+      font-size: 0.85em; color: #475569; font-weight: 600;
+    }
+    .btn-logout {
+      background: #fee2e2; color: #dc2626; border: none;
+      padding: 8px 16px; border-radius: 10px; cursor: pointer;
+      font-weight: 600; font-size: 0.85em; transition: 0.2s;
+    }
+    .btn-logout:hover { background: #fecaca; }
+
+    /* STAT CARDS */
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #fff; border-radius: 16px; padding: 20px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      display: flex; align-items: center; gap: 16px;
+      transition: transform 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center; font-size: 1.5em;
+    }
+    .stat-icon.blue   { background: #dbeafe; }
+    .stat-icon.green  { background: #dcfce7; }
+    .stat-icon.orange { background: #ffedd5; }
+    .stat-icon.purple { background: #f3e8ff; }
+    .stat-info p { font-size: 0.78em; color: #94a3b8; margin-bottom: 2px; font-weight: 500; }
+    .stat-info h3 { font-size: 1.7em; font-weight: 700; color: #0f172a; }
+
+    /* SECTION */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* CARD */
+    .card {
+      background: #fff; border-radius: 16px; padding: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 20px;
+    }
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 18px;
+    }
+    .card-header h3 { font-size: 1em; font-weight: 700; color: #1e3a8a; }
+    .badge {
+      background: #dbeafe; color: #1e40af; padding: 4px 10px;
+      border-radius: 20px; font-size: 0.75em; font-weight: 600;
+    }
+
+    /* CHART */
+    .chart-wrap { position: relative; height: 280px; }
+
+    /* TABLE */
+    table { width: 100%; border-collapse: collapse; font-size: 0.88em; }
+    th {
+      background: #f8fafc; padding: 11px 14px; text-align: left;
+      font-weight: 600; color: #64748b; border-bottom: 2px solid #e2e8f0;
+      font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    td { padding: 11px 14px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    /* STATUS BADGE */
+    .status-badge {
+      padding: 3px 10px; border-radius: 20px; font-size: 0.78em; font-weight: 600;
+    }
+    .status-active    { background: #dcfce7; color: #166534; }
+    .status-completed { background: #f1f5f9; color: #475569; }
+    .status-pending   { background: #fef9c3; color: #854d0e; }
+
+    /* BOOKING ITEM */
+    .booking-item {
+      padding: 14px; border: 1px solid #e2e8f0; border-radius: 12px;
+      margin-bottom: 10px; display: flex; justify-content: space-between;
+      align-items: center; transition: 0.2s;
+    }
+    .booking-item:hover { border-color: #bfdbfe; background: #f8fafc; }
+    .booking-item-left h4 { font-size: 0.95em; font-weight: 600; color: #0f172a; }
+    .booking-item-left p  { font-size: 0.8em; color: #64748b; margin-top: 2px; }
+
+    /* MEJA CARD */
+    .meja-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .meja-card {
+      border: 2px solid #e2e8f0; border-radius: 14px; padding: 18px;
+      text-align: center; transition: 0.2s;
+    }
+    .meja-card.on  { border-color: #86efac; background: #f0fdf4; }
+    .meja-card.off { border-color: #e2e8f0; background: #f8fafc; }
+    .meja-card .lamp-icon { font-size: 2.2em; margin-bottom: 8px; }
+    .meja-card h4 { font-weight: 700; color: #1e3a8a; margin-bottom: 4px; }
+    .meja-card p  { font-size: 0.82em; color: #64748b; }
+
+    /* CONTROL BUTTONS */
+    .control-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+    .btn {
+      padding: 10px 18px; border: none; border-radius: 10px;
+      cursor: pointer; font-weight: 600; font-size: 0.88em; transition: 0.2s;
+    }
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-success  { background: #22c55e; color: #fff; }
+    .btn-danger   { background: #ef4444; color: #fff; }
+    .btn-primary  { background: #3b82f6; color: #fff; }
+    .btn-secondary{ background: #f1f5f9; color: #475569; }
+    .btn-reset    { background: #f59e0b; color: #fff; }
+
+    /* TOAST */
+    .toast {
+      position: fixed; right: 20px; top: 20px; padding: 12px 18px;
+      border-radius: 12px; min-width: 220px; color: #fff; font-weight: 600;
+      z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .toast.success { background: #22c55e; }
+    .toast.error   { background: #ef4444; }
+    .toast.info    { background: #3b82f6; }
+
+    /* FILTER */
+    .filter-bar {
+      display: flex; gap: 8px; margin-bottom: 16px; align-items: center;
+    }
+    .filter-btn {
+      padding: 7px 16px; border-radius: 20px; border: 2px solid #e2e8f0;
+      background: #fff; cursor: pointer; font-size: 0.83em; font-weight: 600;
+      color: #64748b; transition: 0.2s;
+    }
+    .filter-btn.active, .filter-btn:hover {
+      border-color: #3b82f6; background: #dbeafe; color: #1e40af;
+    }
+
+    /* EMPTY STATE */
+    .empty-state {
+      text-align: center; padding: 40px; color: #94a3b8;
+    }
+    .empty-state p { font-size: 2em; margin-bottom: 8px; }
+
+    /* RESPONSIVE */
+    @media(max-width: 1100px) { .stat-grid { grid-template-columns: repeat(2,1fr); } }
+    @media(max-width: 900px) {
+      .sidebar { position: relative; width: 100%; height: auto; }
+      .main { margin-left: 0; }
+      .stat-grid { grid-template-columns: repeat(2,1fr); }
+      .meja-grid { grid-template-columns: 1fr; }
+    }
+    @media(max-width: 500px) { .stat-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 
+<!-- SIDEBAR -->
 <div class="sidebar">
-  <div class="user">
-    <div class="avatar">A</div>
-    <div><b>Admin</b><br><small>admin@billiard.co</small></div>
+  <div class="sidebar-logo">
+    <div class="avatar-big">🎱</div>
+    <h2>Genzyeeeh Billiard</h2>
+    <p>Admin Panel</p>
   </div>
+  <div class="nav-section">Menu</div>
   <nav class="nav">
     <a class="nav-item active" data-target="dashboard">📊 Dashboard</a>
+    <a class="nav-item" data-target="statistik">📈 Statistik</a>
     <a class="nav-item" data-target="lamp">💡 Lamp Control</a>
     <a class="nav-item" data-target="bookings">📋 Bookings</a>
   </nav>
 </div>
 
-<div class="main wrap">
-  <div class="header">
-    <h2>Admin Dashboard</h2>
-    <button class="btn btn-secondary" id="logoutBtn">Logout</button>
-  </div>
+<!-- MAIN -->
+<div class="main">
 
-  <!-- DASHBOARD -->
-  <div id="dashboard" class="section">
-    <div class="card">
-      <h3>Semua Booking Hari Ini</h3>
-      <div id="adminBookingList">Loading...</div>
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <h2 id="pageTitle">📊 Dashboard</h2>
+    <div class="topbar-right">
+      <div class="time-badge">🕐 <span id="topTime">--:--</span></div>
+      <button class="btn-logout" id="logoutBtn">🚪 Logout</button>
     </div>
   </div>
 
-  <!-- LAMP CONTROL -->
-  <div id="lamp" class="section" style="display:none;">
-    <div class="card">
-      <h3>Kontrol Manual</h3>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-        <button class="btn btn-success" onclick="manual(1,'ON')">Meja 1 ON</button>
-        <button class="btn btn-danger" onclick="manual(1,'OFF')">Meja 1 OFF</button>
+  <!-- ==================== DASHBOARD ==================== -->
+  <div id="dashboard" class="section active">
 
-        <button class="btn btn-success" onclick="manual(2,'ON')">Meja 2 ON</button>
-        <button class="btn btn-danger" onclick="manual(2,'OFF')">Meja 2 OFF</button>
-
-        <button class="btn btn-primary" onclick="globalControl('ON')">Semua ON</button>
-        <button class="btn btn-primary" onclick="globalControl('OFF')">Semua OFF</button>
-
-        <button class="btn btn-secondary" onclick="resetMeja()">🔄 Reset Meja</button>
+    <!-- STAT CARDS -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue">📅</div>
+        <div class="stat-info">
+          <p>Booking Hari Ini</p>
+          <h3 id="statBookingHariIni">0</h3>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green">🟢</div>
+        <div class="stat-info">
+          <p>Sedang Aktif</p>
+          <h3 id="statAktif">0</h3>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon orange">⏱️</div>
+        <div class="stat-info">
+          <p>Total Jam Hari Ini</p>
+          <h3 id="statJam">0</h3>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">📆</div>
+        <div class="stat-info">
+          <p>Booking Bulan Ini</p>
+          <h3 id="statBulan">0</h3>
+        </div>
       </div>
     </div>
 
+    <!-- BOOKING HARI INI -->
     <div class="card">
-      <h3>Status Meja</h3>
-      <div id="statusMeja">Memuat...</div>
+      <div class="card-header">
+        <h3>📋 Booking Hari Ini</h3>
+        <span class="badge" id="badgeHariIni">0 booking</span>
+      </div>
+      <div id="adminBookingList"><div class="empty-state"><p>📭</p><span>Belum ada booking hari ini</span></div></div>
+    </div>
+
+  </div>
+
+  <!-- ==================== STATISTIK ==================== -->
+  <div id="statistik" class="section">
+
+    <!-- FILTER -->
+    <div class="filter-bar">
+      <span style="font-size:0.85em;color:#64748b;font-weight:600;">Tampilkan:</span>
+      <button class="filter-btn active" onclick="setFilter(7, this)">7 Hari</button>
+      <button class="filter-btn" onclick="setFilter(14, this)">14 Hari</button>
+      <button class="filter-btn" onclick="setFilter(30, this)">30 Hari</button>
+    </div>
+
+    <!-- CHART -->
+    <div class="card">
+      <div class="card-header">
+        <h3>📊 Grafik Booking Harian</h3>
+        <span class="badge" id="badgeGrafik">30 hari terakhir</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="bookingChart"></canvas>
+      </div>
+    </div>
+
+    <!-- TABEL STATISTIK -->
+    <div class="card">
+      <div class="card-header">
+        <h3>📋 Detail Statistik Harian</h3>
+        <span class="badge" id="badgeTabel">-</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="statsTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tanggal</th>
+              <th>Hari</th>
+              <th>Total Booking</th>
+              <th>Total Jam</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="statsTableBody">
+            <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== LAMP CONTROL ==================== -->
+  <div id="lamp" class="section">
+    <div class="card">
+      <div class="card-header"><h3>🎛️ Kontrol Manual Lampu</h3></div>
+      <div class="control-grid">
+        <button class="btn btn-success"   onclick="manual(1,'ON')">💡 Meja 1 ON</button>
+        <button class="btn btn-danger"    onclick="manual(1,'OFF')">🌑 Meja 1 OFF</button>
+        <button class="btn btn-success"   onclick="manual(2,'ON')">💡 Meja 2 ON</button>
+        <button class="btn btn-danger"    onclick="manual(2,'OFF')">🌑 Meja 2 OFF</button>
+        <button class="btn btn-primary"   onclick="globalControl('ON')">⚡ Semua ON</button>
+        <button class="btn btn-secondary" onclick="globalControl('OFF')">🌑 Semua OFF</button>
+        <button class="btn btn-reset"     onclick="resetMeja()">🔄 Reset Semua</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>📡 Status Meja Real-time</h3></div>
+      <div class="meja-grid" id="statusMeja">
+        <div style="text-align:center;padding:20px;color:#94a3b8">Memuat...</div>
+      </div>
     </div>
   </div>
 
-  <!-- BOOKINGS -->
-  <div id="bookings" class="section" style="display:none;">
+  <!-- ==================== BOOKINGS ==================== -->
+  <div id="bookings" class="section">
     <div class="card">
-      <h3>Detail Booking Hari Ini</h3>
-      <div id="detailedBookings">Loading...</div>
+      <div class="card-header">
+        <h3>📋 Semua Booking Hari Ini</h3>
+        <span class="badge" id="badgeBookings">0</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nama</th>
+              <th>Meja</th>
+              <th>Jam Mulai</th>
+              <th>Jam Selesai</th>
+              <th>Durasi</th>
+              <th>Kode</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="detailedBookings">
+            <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
+
 </div>
 
 <!-- TOAST -->
@@ -102,134 +392,350 @@
 <script>
 const API = "";
 let adminToken = localStorage.getItem("adminToken");
+let bookingChart = null;
+let currentFilter = 30;
 
 if (!adminToken) {
   alert("Session admin habis, silakan login ulang");
   location.href = "login.html";
 }
 
+// ==================== CLOCK ====================
+setInterval(() => {
+  document.getElementById("topTime").textContent =
+    new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}, 1000);
 
-// ---------------- TOAST ----------------
-function toast(msg,type="info",time=2000){
-  const box=document.createElement("div");
-  box.className="toast "+type;
-  box.textContent=msg;
+// ==================== TOAST ====================
+function toast(msg, type = "info", time = 2500) {
+  const box = document.createElement("div");
+  box.className = "toast " + type;
+  box.textContent = msg;
   document.getElementById("toastRoot").appendChild(box);
-  setTimeout(()=>{box.remove()},time);
+  setTimeout(() => box.remove(), time);
 }
 
-// ---------------- NAV ----------------
-document.querySelectorAll(".nav-item").forEach(n=>{
-  n.onclick=()=>{
-    document.querySelectorAll(".nav-item").forEach(a=>a.classList.remove("active"));
+// ==================== NAV ====================
+const pageTitles = {
+  dashboard: "📊 Dashboard",
+  statistik: "📈 Statistik Booking",
+  lamp: "💡 Lamp Control",
+  bookings: "📋 Bookings"
+};
+
+document.querySelectorAll(".nav-item").forEach(n => {
+  n.onclick = () => {
+    document.querySelectorAll(".nav-item").forEach(a => a.classList.remove("active"));
+    document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
     n.classList.add("active");
-    document.querySelectorAll(".section").forEach(s=>s.style.display="none");
-    document.getElementById(n.dataset.target).style.display="block";
+    document.getElementById(n.dataset.target).classList.add("active");
+    document.getElementById("pageTitle").textContent = pageTitles[n.dataset.target] || "";
+    if (n.dataset.target === "statistik") loadStatistik(currentFilter);
+    if (n.dataset.target === "lamp") loadStatusMeja();
+    if (n.dataset.target === "bookings") loadDetailedBookings();
   };
 });
 
-// ---------------- LOGOUT ----------------
-document.getElementById("logoutBtn").onclick=()=>{
+// ==================== LOGOUT ====================
+document.getElementById("logoutBtn").onclick = () => {
   localStorage.removeItem("adminToken");
-  toast("Logout berhasil","success");
-  setTimeout(()=>location.href="login.html",800);
+  toast("Logout berhasil", "success");
+  setTimeout(() => location.href = "login.html", 800);
 };
 
-// ---------------- LOAD ALL ----------------
-async function loadAll(){
-  loadBookings();
-  loadDetailedBookings();
+// ==================== LOAD ALL ====================
+async function loadAll() {
+  await loadBookings();
+  await loadStatCards();
   loadStatusMeja();
 }
-setInterval(loadAll,10000);
+setInterval(loadAll, 15000);
 loadAll();
 
-// ---------------- BOOKINGS ----------------
-async function loadBookings(){
-  try{
-    const r=await fetch(API+"/api/bookings");
-    const data=await r.json();
-    const box=document.getElementById("adminBookingList");
-    if(!data.length){box.innerHTML="Tidak ada booking";return}
-    box.innerHTML=data.map(b=>`
-      <div class="booking">
-        <b>${b.nama}</b> — Meja ${b.meja_id}<br>
-        ${b.jam_mulai} - ${b.jam_selesai} (${b.durasi} jam)
-      </div>`).join("");
-  }catch{toast("Gagal load bookings","error")}
-}
+// ==================== STAT CARDS ====================
+async function loadStatCards() {
+  try {
+    const r = await fetch(API + "/api/bookings");
+    const data = await r.json();
 
-async function loadDetailedBookings(){
-  const r=await fetch(API+"/api/bookings");
-  const data=await r.json();
-  const box=document.getElementById("detailedBookings");
-  if(!data.length){box.innerHTML="Tidak ada booking";return}
-  box.innerHTML=data.map(b=>`
-    <div class="booking">
-      <b>${b.nama}</b> — Meja ${b.meja_id}<br>
-      ${b.jam_mulai} - ${b.jam_selesai}
-    </div>`).join("");
-}
+    const aktif    = data.filter(b => b.status === "active").length;
+    const totalJam = data.reduce((s, b) => s + Number(b.durasi || 0), 0);
 
-// ---------------- STATUS MEJA ----------------
-async function loadStatusMeja(){
-  try{
-    const r=await fetch(API+"/api/status-meja");
-    const data=await r.json();
-    const box=document.getElementById("statusMeja");
-    box.innerHTML="";
-    data.forEach(m=>{
-      box.innerHTML+=`
-        <div class="meja-card">
-          <b>${m.nama_meja}</b><br>
-          Lampu: ${m.status_lampu? "🟢 ON":"⚫ OFF"}<br>
-          Status: ${m.status_booking}
-        </div>`;
-    });
-  }catch{
-    toast("Gagal load status meja","error");
+    document.getElementById("statBookingHariIni").textContent = data.length;
+    document.getElementById("statAktif").textContent = aktif;
+    document.getElementById("statJam").textContent = totalJam + " jam";
+
+    // Booking bulan ini
+    const r2 = await fetch(API + "/api/statistik?days=30");
+    if (r2.ok) {
+      const d2 = await r2.json();
+      const totalBulan = d2.reduce((s, x) => s + Number(x.total_booking || 0), 0);
+      document.getElementById("statBulan").textContent = totalBulan;
+    }
+  } catch (e) {
+    console.error("stat cards error:", e);
   }
 }
 
-// ---------------- MANUAL ----------------
-async function manual(id,act){
-  const r=await fetch(API+"/api/manual-control",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({meja_id:id,action:act})
-  });
-  const d=await r.json();
-  if(r.ok) toast(d.message,"success");
-  else toast("Gagal kontrol","error");
-  loadStatusMeja();
+// ==================== BOOKINGS (DASHBOARD) ====================
+async function loadBookings() {
+  try {
+    const r    = await fetch(API + "/api/bookings");
+    const data = await r.json();
+    const box  = document.getElementById("adminBookingList");
+
+    document.getElementById("badgeHariIni").textContent = data.length + " booking";
+
+    if (!data.length) {
+      box.innerHTML = `<div class="empty-state"><p>📭</p><span>Belum ada booking hari ini</span></div>`;
+      return;
+    }
+
+    const statusMap = {
+      active:    `<span class="status-badge status-active">🟢 Aktif</span>`,
+      completed: `<span class="status-badge status-completed">✅ Selesai</span>`,
+      pending:   `<span class="status-badge status-pending">⏳ Menunggu</span>`,
+    };
+
+    box.innerHTML = data.map(b => `
+      <div class="booking-item">
+        <div class="booking-item-left">
+          <h4>👤 ${b.nama} &nbsp;•&nbsp; Meja ${b.meja_id}</h4>
+          <p>⏰ ${b.jam_mulai} - ${b.jam_selesai} &nbsp;|&nbsp; ⏱️ ${b.durasi} jam &nbsp;|&nbsp; 🔑 ${b.kode_aktivasi || '-'}</p>
+        </div>
+        ${statusMap[b.status] || statusMap.pending}
+      </div>
+    `).join("");
+  } catch {
+    toast("Gagal load bookings", "error");
+  }
 }
 
-// ---------------- GLOBAL ----------------
-async function globalControl(act){
-  if(!adminToken){return toast("Session expired","error")}
-  const r=await fetch(API+"/api/lampu/control",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization":adminToken
+// ==================== DETAILED BOOKINGS (TABLE) ====================
+async function loadDetailedBookings() {
+  try {
+    const r    = await fetch(API + "/api/bookings");
+    const data = await r.json();
+    const body = document.getElementById("detailedBookings");
+
+    document.getElementById("badgeBookings").textContent = data.length;
+
+    if (!data.length) {
+      body.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px">Tidak ada booking hari ini</td></tr>`;
+      return;
+    }
+
+    const statusMap = {
+      active:    `<span class="status-badge status-active">🟢 Aktif</span>`,
+      completed: `<span class="status-badge status-completed">✅ Selesai</span>`,
+      pending:   `<span class="status-badge status-pending">⏳ Menunggu</span>`,
+    };
+
+    body.innerHTML = data.map((b, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><b>${b.nama}</b></td>
+        <td>Meja ${b.meja_id}</td>
+        <td>${b.jam_mulai}</td>
+        <td>${b.jam_selesai}</td>
+        <td>${b.durasi} jam</td>
+        <td><code style="background:#f1f5f9;padding:2px 8px;border-radius:6px;font-size:0.85em">${b.kode_aktivasi || '-'}</code></td>
+        <td>${statusMap[b.status] || statusMap.pending}</td>
+      </tr>
+    `).join("");
+  } catch (e) {
+    toast("Gagal load detail bookings", "error");
+  }
+}
+
+// ==================== STATUS MEJA ====================
+async function loadStatusMeja() {
+  try {
+    const r    = await fetch(API + "/api/status-meja");
+    const data = await r.json();
+    const box  = document.getElementById("statusMeja");
+    box.innerHTML = data.map(m => `
+      <div class="meja-card ${m.status_lampu ? 'on' : 'off'}">
+        <div class="lamp-icon">${m.status_lampu ? '💡' : '🌑'}</div>
+        <h4>${m.nama_meja}</h4>
+        <p>Lampu: <b>${m.status_lampu ? 'ON' : 'OFF'}</b></p>
+        <p>Status: <b>${m.status_booking}</b></p>
+      </div>
+    `).join("");
+  } catch {
+    toast("Gagal load status meja", "error");
+  }
+}
+
+// ==================== STATISTIK ====================
+async function loadStatistik(days) {
+  try {
+    document.getElementById("badgeGrafik").textContent = `${days} hari terakhir`;
+
+    const r    = await fetch(API + `/api/statistik?days=${days}`);
+    const data = await r.json();
+
+    renderChart(data, days);
+    renderTable(data);
+  } catch (e) {
+    toast("Gagal load statistik", "error");
+  }
+}
+
+function setFilter(days, btn) {
+  currentFilter = days;
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  loadStatistik(days);
+}
+
+function renderChart(data, days) {
+  const labels = data.map(d => {
+    const date = new Date(d.tanggal);
+    return date.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+  });
+  const values = data.map(d => Number(d.total_booking));
+
+  const ctx = document.getElementById("bookingChart").getContext("2d");
+
+  if (bookingChart) bookingChart.destroy();
+
+  bookingChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Jumlah Booking",
+        data: values,
+        backgroundColor: values.map(v =>
+          v === 0 ? "rgba(226,232,240,0.8)" :
+          v >= 3  ? "rgba(59,130,246,0.85)" :
+                    "rgba(99,179,237,0.85)"
+        ),
+        borderColor: values.map(v =>
+          v === 0 ? "#cbd5e0" :
+          v >= 3  ? "#2563eb" : "#63b3ed"
+        ),
+        borderWidth: 2,
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
     },
-    body:JSON.stringify({action:act})
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.raw} booking`,
+            title: ctx => {
+              const d = data[ctx[0].dataIndex];
+              return new Date(d.tanggal).toLocaleDateString("id-ID", {
+                weekday: "long", day: "numeric", month: "long", year: "numeric"
+              });
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 }, maxRotation: 45 }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, font: { size: 11 } },
+          grid: { color: "rgba(0,0,0,0.05)" }
+        }
+      }
+    }
   });
-  const d=await r.json();
-  if(r.ok) toast(d.message,"success");
-  else toast("Gagal global control","error");
-  loadStatusMeja();
 }
 
-// ---------------- RESET MEJA (FINAL FIX) ----------------
-async function resetMeja(){
-  const r=await fetch(API+"/api/reset-meja",{method:"POST"});
-  const d=await r.json();
-  if(r.ok) toast("RESET BERHASIL!","success");
-  else toast("Gagal reset meja","error");
-  loadAll();
+function renderTable(data) {
+  const body    = document.getElementById("statsTableBody");
+  const today   = new Date().toISOString().slice(0, 10);
+  const total   = data.reduce((s, d) => s + Number(d.total_booking), 0);
+  const totalJam= data.reduce((s, d) => s + Number(d.total_jam || 0), 0);
+
+  document.getElementById("badgeTabel").textContent =
+    `Total: ${total} booking | ${totalJam} jam`;
+
+  if (!data.length) {
+    body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Tidak ada data</td></tr>`;
+    return;
+  }
+
+  const hariMap = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+
+  body.innerHTML = [...data].reverse().map((d, i) => {
+    const tgl    = new Date(d.tanggal);
+    const isToday= d.tanggal.slice(0,10) === today;
+    const hari   = hariMap[tgl.getDay()];
+    const n      = Number(d.total_booking);
+
+    const statusBadge = isToday
+      ? `<span class="status-badge status-active">Hari ini</span>`
+      : n === 0
+      ? `<span class="status-badge status-completed">Tidak ada</span>`
+      : `<span class="status-badge status-pending">${n} booking</span>`;
+
+    return `
+      <tr ${isToday ? 'style="background:#eff6ff"' : ''}>
+        <td>${i + 1}</td>
+        <td><b>${tgl.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</b></td>
+        <td>${hari}</td>
+        <td><b>${n}</b></td>
+        <td>${d.total_jam || 0} jam</td>
+        <td>${statusBadge}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+// ==================== MANUAL ====================
+async function manual(id, act) {
+  try {
+    const r = await fetch(API + "/api/manual-control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meja_id: id, action: act })
+    });
+    const d = await r.json();
+    if (r.ok) toast(d.message, "success");
+    else toast("Gagal kontrol", "error");
+    loadStatusMeja();
+  } catch { toast("Gagal kontrol", "error"); }
+}
+
+// ==================== GLOBAL ====================
+async function globalControl(act) {
+  if (!adminToken) return toast("Session expired", "error");
+  try {
+    const r = await fetch(API + "/api/lampu/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": adminToken },
+      body: JSON.stringify({ action: act })
+    });
+    const d = await r.json();
+    if (r.ok) toast(d.message, "success");
+    else toast("Gagal global control", "error");
+    loadStatusMeja();
+  } catch { toast("Gagal", "error"); }
+}
+
+// ==================== RESET ====================
+async function resetMeja() {
+  if (!confirm("Reset semua meja? Semua booking akan ditandai selesai.")) return;
+  try {
+    const r = await fetch(API + "/api/reset-meja", { method: "POST" });
+    const d = await r.json();
+    if (r.ok) toast("Reset berhasil!", "success");
+    else toast("Gagal reset", "error");
+    loadAll();
+  } catch { toast("Gagal reset", "error"); }
 }
 </script>
-
 </body>
 </html>

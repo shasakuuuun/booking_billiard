@@ -465,6 +465,37 @@ cron.schedule("* * * * * *", async () => {
         }
     }
 });
+// ======================================================
+// API — STATISTIK BOOKING
+// ======================================================
+app.get("/api/statistik", async (req, res) => {
+    try {
+        const days = parseInt(req.query.days || "30");
+
+        const result = await db.query(`
+            SELECT
+                gs.tanggal::date AS tanggal,
+                COALESCE(COUNT(b.id), 0)   AS total_booking,
+                COALESCE(SUM(b.durasi), 0) AS total_jam
+            FROM generate_series(
+                CURRENT_DATE - INTERVAL '1 day' * ($1 - 1),
+                CURRENT_DATE,
+                INTERVAL '1 day'
+            ) AS gs(tanggal)
+            LEFT JOIN bookings b
+                ON b.tanggal = gs.tanggal::date
+            GROUP BY gs.tanggal
+            ORDER BY gs.tanggal ASC
+        `, [days]);
+
+        res.json(result.rows);
+    } catch (err) {
+        log("❌ Statistik error: " + err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 
 // ======================================================
 // START SERVER
