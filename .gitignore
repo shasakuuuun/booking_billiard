@@ -1,0 +1,8 @@
+# WAJIB - jangan pernah upload ke GitHub
+.env
+
+# Dependencies
+node_modules/
+
+# Log files
+*.log
