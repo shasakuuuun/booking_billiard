@@ -142,11 +142,14 @@ app.post("/api/booking", async (req, res) => {
         const jam_selesai = end.toTimeString().slice(0, 5);
 
         // Insert booking
+        const totalHarga = durasi * 30000;
+
         const insertResult = await db.query(`
-            INSERT INTO bookings (nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi)
-            VALUES ($1, $2, $3, $4, CURRENT_DATE, $5)
+            INSERT INTO bookings 
+                (nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi, status_bayar, total_harga)
+            VALUES ($1, $2, $3, $4, CURRENT_DATE, $5, 'belum', $6)
             RETURNING id
-        `, [nama, meja_id, jam_mulai, jam_selesai, durasi]);
+        `, [nama, meja_id, jam_mulai, jam_selesai, durasi, totalHarga]);
 
         const bookingId    = insertResult.rows[0].id;
         const kodeAktivasi = makeKodeAktivasi(bookingId);
@@ -495,6 +498,24 @@ app.get("/api/statistik", async (req, res) => {
     }
 });
 
+
+
+// ======================================================
+// API — KONFIRMASI PEMBAYARAN (Admin)
+// ======================================================
+app.post("/api/konfirmasi-bayar", requireAdmin, async (req, res) => {
+    try {
+        const { booking_id } = req.body;
+        await db.query(
+            "UPDATE bookings SET status_bayar = 'lunas' WHERE id = $1",
+            [booking_id]
+        );
+        log(`💰 LUNAS → Booking #${booking_id}`);
+        res.json({ message: "Pembayaran dikonfirmasi!" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 
 // ======================================================
