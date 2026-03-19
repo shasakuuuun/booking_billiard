@@ -3,33 +3,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Genzyeeeh Billiard</title>
+    <title>🎱 Smart Billiard Booking</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* GRID MEJA */
+        .meja-grid-section {
+            background: rgba(255,255,255,0.65);
+            padding: 28px 30px;
+            border-radius: 20px;
+            margin-bottom: 25px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .meja-grid-section h2 {
+            color: #4a5568;
+            font-size: 1.5em;
+            margin-bottom: 6px;
+        }
+        .meja-grid-section .subtitle {
+            color: #718096;
+            font-size: 0.88em;
+            margin-bottom: 18px;
+        }
+
+        /* LEGEND */
+        .meja-legend {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.82em;
+            color: #4a5568;
+            font-weight: 600;
+        }
+        .legend-dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+        }
+        .legend-dot.kosong  { background: #48bb78; }
+        .legend-dot.main    { background: #ef4444; }
+        .legend-dot.tunggu  { background: #f6ad55; }
+
+        /* GRID */
+        .meja-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+
+        .meja-box {
+            border-radius: 14px;
+            padding: 14px 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            border: 2px solid transparent;
+            position: relative;
+        }
+        .meja-box:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        }
+
+        /* STATUS COLORS */
+        .meja-box.kosong {
+            background: linear-gradient(135deg, #f0fff4, #c6f6d5);
+            border-color: #68d391;
+        }
+        .meja-box.main {
+            background: linear-gradient(135deg, #fff5f5, #fed7d7);
+            border-color: #fc8181;
+            animation: pulseRed 2s infinite;
+        }
+        .meja-box.tunggu {
+            background: linear-gradient(135deg, #fffaf0, #feebc8);
+            border-color: #f6ad55;
+        }
+        .meja-box.smart {
+            /* badge untuk meja 1 & 2 */
+        }
+
+        @keyframes pulseRed {
+            0%   { box-shadow: 0 0 0 0 rgba(252,129,129,0.4); }
+            70%  { box-shadow: 0 0 0 8px rgba(252,129,129,0); }
+            100% { box-shadow: 0 0 0 0 rgba(252,129,129,0); }
+        }
+
+        .meja-box .meja-icon  { font-size: 1.8em; margin-bottom: 6px; }
+        .meja-box .meja-name  { font-size: 0.82em; font-weight: 700; color: #2d3748; margin-bottom: 4px; }
+        .meja-box .meja-status{
+            font-size: 0.72em; font-weight: 600; padding: 2px 8px;
+            border-radius: 20px; display: inline-block;
+        }
+        .meja-box.kosong .meja-status { background: #c6f6d5; color: #22543d; }
+        .meja-box.main   .meja-status { background: #fed7d7; color: #742a2a; }
+        .meja-box.tunggu .meja-status { background: #feebc8; color: #7b341e; }
+
+        /* SMART BADGE */
+        .smart-badge {
+            position: absolute; top: 6px; right: 6px;
+            background: #2563eb; color: white;
+            font-size: 0.6em; font-weight: 700;
+            padding: 1px 6px; border-radius: 20px;
+        }
+
+        /* NAMA BOOKING */
+        .meja-booking-nama {
+            font-size: 0.68em; color: #4a5568;
+            margin-top: 3px; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        @media(max-width: 768px) {
+            .meja-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media(max-width: 480px) {
+            .meja-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
 </head>
+
 <body>
     <div class="booking-wrapper">
 
         <!-- HEADER -->
         <header class="booking-header">
             <h1 class="title">🎱 Genzyeeeh Billiard Booking</h1>
-            <!-- <div class="status-indicator">
+            <div class="status-indicator">
                 <span id="lampuStatus">⚫ Lampu: OFF</span>
-            </div> -->
+            </div>
         </header>
+
+        <!-- TODAY SCHEDULE -->
+        <section class="schedule-section">
+            <h2>📋 Jadwal Booking Hari Ini</h2>
+            <div class="current-time">
+                Waktu Sekarang: <span id="currentTime">--:--</span>
+            </div>
+            <div id="scheduleList">
+                <div class="loading">Loading jadwal...</div>
+            </div>
+        </section>
+
+
+        <!-- ✨ GRID STATUS MEJA -->
+        <section class="meja-grid-section">
+            <h2>🎱 Status Meja</h2>
+            <p class="subtitle">Klik meja untuk langsung memilih saat booking</p>
+
+            <div class="meja-legend">
+                <div class="legend-item"><div class="legend-dot kosong"></div> Kosong</div>
+                <div class="legend-item"><div class="legend-dot main"></div> Sedang Main</div>
+                <div class="legend-item"><div class="legend-dot tunggu"></div> Menunggu</div>
+            </div>
+
+            <div class="meja-grid" id="mejaStatusGrid">
+                <!-- Di-render oleh JS -->
+                <div style="text-align:center;padding:20px;color:#718096;grid-column:span 5">
+                    Memuat status meja...
+                </div>
+            </div>
+        </section>
 
         <!-- BOOKING FORM -->
         <section class="booking-section">
             <h2>📅 Form Booking</h2>
             <form id="bookingForm">
+
                 <div class="form-group">
                     <label for="nama">👤 Nama Customer:</label>
                     <input type="text" id="nama" name="nama" required placeholder="Masukkan nama Anda">
                 </div>
+
                 <div class="form-group">
                     <label for="jamMulai">⏰ Jam Mulai:</label>
                     <input type="time" id="jamMulai" name="jamMulai" required>
                 </div>
+
                 <div class="form-group">
                     <label for="durasi">⏱️ Durasi Main:</label>
                     <select id="durasi" name="durasi" required>
@@ -42,19 +199,29 @@
                     </select>
                     <div id="hargaPreview" style="display:none"></div>
                 </div>
+
                 <div class="form-group">
                     <label for="meja">🎱 Pilih Meja:</label>
                     <select id="meja" name="meja" required>
                         <option value="">Pilih meja...</option>
-                        <option value="1">Meja 1</option>
-                        <option value="2">Meja 2</option>
+                        <option value="1">Meja 1 ⚡ (Smart)</option>
+                        <option value="2">Meja 2 ⚡ (Smart)</option>
+                        <option value="3">Meja 3</option>
+                        <option value="4">Meja 4</option>
+                        <option value="5">Meja 5</option>
+                        <option value="6">Meja 6</option>
+                        <option value="7">Meja 7</option>
+                        <option value="8">Meja 8</option>
+                        <option value="9">Meja 9</option>
+                        <option value="10">Meja 10</option>
                     </select>
                 </div>
+
                 <button type="submit" class="btn-submit">Book Sekarang!</button>
             </form>
         </section>
 
-        <!-- ✨ BARU — AKTIVASI KODE -->
+        <!-- AKTIVASI KODE -->
         <section class="aktivasi-section">
             <h2>🔑 Aktivasi Lampu</h2>
             <p class="aktivasi-desc">
@@ -75,18 +242,92 @@
             </div>
         </section>
 
-        <!-- TODAY SCHEDULE -->
-        <section class="schedule-section">
-            <h2>📋 Jadwal Booking Hari Ini</h2>
-            <div class="current-time">
-                Waktu Sekarang: <span id="currentTime">--:--</span>
-            </div>
-            <div id="scheduleList">
-                <div class="loading">Loading jadwal...</div>
-            </div>
-        </section>
+        
 
     </div>
+
     <script src="script.js"></script>
+    <script>
+    // ====== RENDER GRID MEJA ======
+    const SMART_MEJA = [1, 2]; // Meja yang konek ESP32
+    const TOTAL_MEJA = 10;
+
+    async function loadMejaGrid() {
+        try {
+            const r    = await fetch("/api/bookings");
+            const data = await r.json();
+            const now  = new Date().toTimeString().slice(0, 5);
+            const grid = document.getElementById("mejaStatusGrid");
+
+            // Buat map status per meja
+            const mejaStatus = {};
+            for (let i = 1; i <= TOTAL_MEJA; i++) {
+                mejaStatus[i] = { status: "kosong", nama: "" };
+            }
+
+            data.forEach(b => {
+                if (b.status === "completed") return;
+                const id = Number(b.meja_id);
+                if (!mejaStatus[id]) return;
+
+                const isMain = b.jam_mulai <= now && b.jam_selesai > now;
+                if (isMain) {
+                    mejaStatus[id] = { status: "main", nama: b.nama };
+                } else if (b.jam_mulai > now) {
+                    // Hanya set tunggu kalau belum ada yang main
+                    if (mejaStatus[id].status !== "main") {
+                        mejaStatus[id] = { status: "tunggu", nama: b.nama };
+                    }
+                }
+            });
+
+            const iconMap = {
+                kosong: "🟢",
+                main:   "🔴",
+                tunggu: "🟡"
+            };
+            const labelMap = {
+                kosong: "Kosong",
+                main:   "Sedang Main",
+                tunggu: "Menunggu"
+            };
+
+            grid.innerHTML = Array.from({ length: TOTAL_MEJA }, (_, i) => {
+                const id     = i + 1;
+                const info   = mejaStatus[id];
+                const isSmart= SMART_MEJA.includes(id);
+
+                return `
+                    <div class="meja-box ${info.status} ${isSmart ? 'smart' : ''}"
+                         onclick="pilihMeja(${id})"
+                         title="Klik untuk pilih Meja ${id}">
+                        ${isSmart ? '<span class="smart-badge">⚡ Smart</span>' : ''}
+                        <div class="meja-icon">${iconMap[info.status]}</div>
+                        <div class="meja-name">Meja ${id}</div>
+                        <span class="meja-status">${labelMap[info.status]}</span>
+                        ${info.nama ? `<div class="meja-booking-nama">👤 ${info.nama}</div>` : ''}
+                    </div>
+                `;
+            }).join("");
+
+        } catch (e) {
+            console.error("loadMejaGrid error:", e);
+        }
+    }
+
+    // Klik meja → langsung pilih di dropdown
+    function pilihMeja(id) {
+        const select = document.getElementById("meja");
+        if (select) {
+            select.value = id;
+            // Scroll ke form booking
+            document.querySelector(".booking-section").scrollIntoView({ behavior: "smooth" });
+        }
+    }
+
+    // Load grid saat pertama & refresh tiap 30 detik
+    loadMejaGrid();
+    setInterval(loadMejaGrid, 30000);
+    </script>
 </body>
 </html>
