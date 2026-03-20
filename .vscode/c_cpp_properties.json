@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "ESP32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:/Users/muhai/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.2/libraries/**",
+                "C:/Users/muhai/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.2/cores/esp32/**",
+                "C:/Users/muhai/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.2/variants/esp32/**",
+                "C:/Users/muhai/AppData/Local/Arduino15/packages/esp32/tools/**"
+            ],
+            "defines": [
+                "ARDUINO=100",
+                "ESP32"
+            ],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}

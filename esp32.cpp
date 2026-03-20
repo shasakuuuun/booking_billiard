@@ -1,126 +1,215 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
 
-// #include <WiFi.h>
-// #include <HTTPClient.h>
+// ================== WIFI CONFIG ==================
+const char* ssid     = "NAMA_WIFI_LO";
+const char* password = "PASSWORD_WIFI_LO";
 
-// // ================== WIFI CONFIG ==================
-// const char* ssid = "";
-// const char* password = "";
+// ================== SERVER CONFIG ==================
+String serverUrl = "http://10.56.202.200:3000";
 
-// // ================== SERVER CONFIG ==================
-// String serverUrl = "*************************"; // IP laptop / server
+// ================== RELAY PINS ==================
+#define RELAY1 18  // GPIO18 → Relay Channel 1 → Lampu Meja 1
+#define RELAY2 19  // GPIO19 → Relay Channel 2 → Lampu Meja 2
 
-// // ================== RELAY PINS ==================
-// #define RELAY1 18  // Meja 1
-// #define RELAY2 19  // Meja 2
+// ================== SENSOR GETAR SW-420 ==================
+#define SENSOR1 34  // GPIO34 → Sensor getar Meja 1
+#define SENSOR2 35  // GPIO35 → Sensor getar Meja 2
 
-// // ================== SETUP ==================
-// void setup() {
-//   Serial.begin(115200);
+// ================== KONFIGURASI ==================
+#define SHAKE_DEBOUNCE_MS   500    // Debounce antar getaran
+#define SHAKE_COOLDOWN_MS   10000  // Cooldown reset timer ke server (10 detik)
 
-//   pinMode(RELAY1, OUTPUT);
-//   pinMode(RELAY2, OUTPUT);
+// ================== STATE ==================
+unsigned long lastShakeTime1 = 0;
+unsigned long lastShakeTime2 = 0;
+unsigned long lastSendReset1 = 0;
+unsigned long lastSendReset2 = 0;
 
-//   // Relay aktif LOW
-//   digitalWrite(RELAY1, HIGH);
-//   digitalWrite(RELAY2, HIGH);
+// ================== SETUP ==================
+void setup() {
+  Serial.begin(115200);
+  delay(500);
 
-//   Serial.println("📡 Connecting WiFi...");
-//   WiFi.begin(ssid, password);
+  Serial.println("========================================");
+  Serial.println("   SMART BILLIARD ESP32 - STARTING");
+  Serial.println("========================================");
 
-//   int retry = 0;
-//   while (WiFi.status() != WL_CONNECTED && retry < 30) {
-//     delay(500);
-//     Serial.print(".");
-//     retry++;
-//   }
+  // Setup Relay — aktif LOW, default OFF
+  pinMode(RELAY1, OUTPUT);
+  pinMode(RELAY2, OUTPUT);
+  digitalWrite(RELAY1, HIGH);
+  digitalWrite(RELAY2, HIGH);
 
-//   if (WiFi.status() == WL_CONNECTED) {
-//     Serial.println("\n✅ WiFi Connected!");
-//     Serial.print("IP: ");
-//     Serial.println(WiFi.localIP());
-//   } else {
-//     Serial.println("\n❌ WiFi Failed! Restarting...");
-//     delay(3000);
-//     ESP.restart();
-//   }
-// }
+  // Setup Sensor Getar
+  pinMode(SENSOR1, INPUT);
+  pinMode(SENSOR2, INPUT);
 
-// // ================== MAIN LOOP ==================
-// void loop() {
-//   if (WiFi.status() != WL_CONNECTED) {
-//     reconnectWiFi();
-//   }
+  Serial.println("✅ Pin setup selesai");
+  Serial.println("💡 Relay  : MEJA1=GPIO18 | MEJA2=GPIO19");
+  Serial.println("🔔 Sensor : MEJA1=GPIO34 | MEJA2=GPIO35");
+  Serial.println("📌 Mode   : Sensor HANYA reset timer (tidak nyalain lampu)");
 
-//   checkCommandForMeja(1);
-//   delay(300);
+  // Koneksi WiFi
+  Serial.println("📡 Connecting WiFi...");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
 
-//   checkCommandForMeja(2);
-//   delay(1500);
-// }
+  int retry = 0;
+  while (WiFi.status() != WL_CONNECTED && retry < 30) {
+    delay(500);
+    Serial.print(".");
+    retry++;
+  }
 
-// // ======================================================
-// // CHECK COMMAND per MEJA → /api/esp-command?meja=1
-// // ======================================================
-// void checkCommandForMeja(int mejaID) {
-//   HTTPClient http;
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ WiFi Connected!");
+    Serial.print("📍 IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("📶 Signal: ");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
+  } else {
+    Serial.println("\n❌ WiFi Failed! Restarting...");
+    delay(3000);
+    ESP.restart();
+  }
+}
 
-//   String url = serverUrl + "/api/esp-command?meja=" + String(mejaID);
+// ================== MAIN LOOP ==================
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+    reconnectWiFi();
+    return;
+  }
 
-//   http.begin(url);
-//   int httpCode = http.GET();
+  // Cek sensor getar — HANYA untuk reset timer, tidak nyalain lampu
+  checkShakeSensor(1, SENSOR1, lastShakeTime1, lastSendReset1);
+  checkShakeSensor(2, SENSOR2, lastShakeTime2, lastSendReset2);
 
-//   if (httpCode == 200) {
-//     String cmd = http.getString();
-//     cmd.trim();
+  // Cek command dari server (ON/OFF)
+  checkCommandForMeja(1);
+  delay(300);
+  checkCommandForMeja(2);
+  delay(1500);
+}
 
-//     if (cmd.length() > 0) {
-//       Serial.print("📨 Command meja ");
-//       Serial.print(mejaID);
-//       Serial.print(": ");
-//       Serial.println(cmd);
-//     }
+// ================== CEK SENSOR GETAR ==================
+// Fungsi ini HANYA reset timer di server
+// Lampu TIDAK akan nyala dari sini
+// ======================================================
+void checkShakeSensor(int mejaId, int pin, unsigned long &lastShake, unsigned long &lastSend) {
+  int val = digitalRead(pin);
 
-//     if (cmd == "ON1") {
-//       digitalWrite(RELAY1, LOW);
-//       Serial.println("💡 Meja 1 NYALA");
-//     } 
-//     else if (cmd == "OFF1") {
-//       digitalWrite(RELAY1, HIGH);
-//       Serial.println("⚫ Meja 1 MATI");
-//     }
-//     else if (cmd == "ON2") {
-//       digitalWrite(RELAY2, LOW);
-//       Serial.println("💡 Meja 2 NYALA");
-//     }
-//     else if (cmd == "OFF2") {
-//       digitalWrite(RELAY2, HIGH);
-//       Serial.println("⚫ Meja 2 MATI");
-//     }
-//   }
+  // SW-420: LOW = ada getaran
+  if (val == LOW) {
+    unsigned long now = millis();
 
-//   http.end();
-// }
+    // Debounce
+    if (now - lastShake < SHAKE_DEBOUNCE_MS) return;
+    lastShake = now;
 
-// // ======================================================
-// // WIFI RECONNECT
-// // ======================================================
-// void reconnectWiFi() {
-//   Serial.println("🔄 Reconnecting WiFi...");
+    Serial.print("🔔 AKTIVITAS TERDETEKSI → Meja ");
+    Serial.println(mejaId);
 
-//   WiFi.disconnect();
-//   WiFi.begin(ssid, password);
+    // Kirim reset timer ke server (dengan cooldown supaya tidak spam)
+    if (now - lastSend >= SHAKE_COOLDOWN_MS) {
+      lastSend = now;
+      sendResetTimer(mejaId);
+    }
+  }
+}
 
-//   int retry = 0;
-//   while (WiFi.status() != WL_CONNECTED && retry < 20) {
-//     delay(500);
-//     Serial.print(".");
-//     retry++;
-//   }
+// ================== KIRIM RESET TIMER KE SERVER ==================
+// Server akan reset countdown 15 menit
+// Lampu TIDAK dinyalakan dari sini
+// ================================================================
+void sendResetTimer(int mejaId) {
+  if (WiFi.status() != WL_CONNECTED) return;
 
-//   if (WiFi.status() == WL_CONNECTED) {
-//     Serial.println("\n✅ WiFi Reconnected!");
-//   } else {
-//     Serial.println("\n❌ Failed! Restarting ESP...");
-//     ESP.restart();
-//   }
-// }
+  HTTPClient http;
+  String url = serverUrl + "/api/shake";
+
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+
+  String body = "{\"meja_id\":" + String(mejaId) + ",\"reset_only\":true}";
+  int httpCode = http.POST(body);
+
+  if (httpCode == 200) {
+    Serial.print("✅ Timer direset → Meja ");
+    Serial.print(mejaId);
+    Serial.println(" (lampu tidak berubah)");
+  } else {
+    Serial.print("❌ Gagal reset timer, kode: ");
+    Serial.println(httpCode);
+  }
+
+  http.end();
+}
+
+// ================== CHECK COMMAND per MEJA ==================
+void checkCommandForMeja(int mejaID) {
+  HTTPClient http;
+
+  String url = serverUrl + "/api/esp-command?meja=" + String(mejaID);
+
+  http.begin(url);
+  http.setTimeout(3000);
+  int httpCode = http.GET();
+
+  if (httpCode == 200) {
+    String cmd = http.getString();
+    cmd.trim();
+
+    if (cmd.length() > 0) {
+      Serial.print("📨 Command meja ");
+      Serial.print(mejaID);
+      Serial.print(": ");
+      Serial.println(cmd);
+    }
+
+    if (cmd == "ON1") {
+      digitalWrite(RELAY1, LOW);
+      Serial.println("💡 Meja 1 NYALA");
+    }
+    else if (cmd == "OFF1") {
+      digitalWrite(RELAY1, HIGH);
+      Serial.println("⚫ Meja 1 MATI");
+    }
+    else if (cmd == "ON2") {
+      digitalWrite(RELAY2, LOW);
+      Serial.println("💡 Meja 2 NYALA");
+    }
+    else if (cmd == "OFF2") {
+      digitalWrite(RELAY2, HIGH);
+      Serial.println("⚫ Meja 2 MATI");
+    }
+  }
+
+  http.end();
+}
+
+// ================== WIFI RECONNECT ==================
+void reconnectWiFi() {
+  Serial.println("🔄 Reconnecting WiFi...");
+
+  WiFi.disconnect();
+  WiFi.begin(ssid, password);
+
+  int retry = 0;
+  while (WiFi.status() != WL_CONNECTED && retry < 20) {
+    delay(500);
+    Serial.print(".");
+    retry++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ WiFi Reconnected!");
+    Serial.print("📍 IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n❌ Failed! Restarting ESP...");
+    ESP.restart();
+  }
+}

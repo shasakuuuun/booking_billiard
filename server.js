@@ -328,15 +328,30 @@ const SHAKE_TIMEOUT_MS = 15 * 60 * 1000; // 15 menit
 
 app.post("/api/shake", async (req, res) => {
     try {
-        const { meja_id } = req.body;
+        const { meja_id, reset_only } = req.body;
+
         if (!meja_id || ![1, 2].includes(Number(meja_id))) {
             return res.status(400).json({ error: "meja_id tidak valid" });
         }
+
+        // Reset timer — selalu dilakukan
         lastShake[meja_id] = Date.now();
-        log("🔔 GETAR → Meja " + meja_id);
-        pushCommand(`ON${meja_id}`);
-        await db.query("UPDATE meja_billiard SET status_lampu = TRUE WHERE id = $1", [meja_id]);
-        return res.json({ message: "Shake recorded" });
+        log("🔔 AKTIVITAS → Meja " + meja_id);
+
+        // Hanya nyalain lampu kalau bukan reset_only
+        if (!reset_only) {
+            pushCommand(`ON${meja_id}`);
+            await db.query(
+                "UPDATE meja_billiard SET status_lampu = TRUE WHERE id = $1",
+                [meja_id]
+            );
+            log(`💡 Lampu ON → Meja ${meja_id}`);
+        } else {
+            log(`⏱️ Timer direset → Meja ${meja_id} (lampu tidak berubah)`);
+        }
+
+        return res.json({ message: "OK" });
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
