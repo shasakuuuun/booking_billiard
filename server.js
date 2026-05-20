@@ -1,6 +1,7 @@
 //====================================================================
 // SMART BILLIARD SERVER - PostgreSQL Version
-// (FINAL: BOOKING + KODE AKTIVASI + SHAKE SENSOR + CRON)
+// (FIXED: requireAdmin header case-insensitive, lastShake posisi,
+//         cron sensor tiap menit, reset-meja pakai auth)
 //====================================================================
 
 const express  = require("express");
@@ -48,8 +49,9 @@ function makeKodeAktivasi(bookingId) {
     return `BIL-${pad}-${year}`;
 }
 
+// FIX: header bisa huruf besar/kecil (Authorization atau authorization)
 function requireAdmin(req, res, next) {
-    const token = req.headers["authorization"];
+    const token = req.headers["authorization"] || req.headers["Authorization"];
     if (!token || !adminSessions.has(token)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
@@ -67,7 +69,6 @@ const db = new Pool({
     database: process.env.DB_DATABASE || "billiard_booking",
 });
 
-// Test koneksi saat startup
 db.connect()
     .then(client => {
         log("✅ PostgreSQL Connected!");
@@ -82,6 +83,10 @@ db.connect()
 // ESP COMMAND QUEUE
 // ======================================================
 let commandQueue = { 1: "", 2: "" };
+
+// FIX: lastShake dideklarasi di sini (sebelum semua route)
+let lastShake          = { 1: Date.now(), 2: Date.now() };
+const SHAKE_TIMEOUT_MS = 15 * 60 * 1000; // 15 menit
 
 function pushCommand(cmd) {
     const meja = Number(cmd.replace(/\D/g, ""));
@@ -136,12 +141,10 @@ app.post("/api/booking", async (req, res) => {
         if (!nama || !jam_mulai || !durasi || !meja_id)
             return res.status(400).json({ error: "Semua field harus diisi" });
 
-        // Hitung jam selesai
         const start = new Date(`1970-01-01T${jam_mulai}:00`);
         const end   = new Date(start.getTime() + durasi * 3600000);
         const jam_selesai = end.toTimeString().slice(0, 5);
 
-        // Insert booking
         const totalHarga = durasi * 30000;
 
         const insertResult = await db.query(`
@@ -154,7 +157,6 @@ app.post("/api/booking", async (req, res) => {
         const bookingId    = insertResult.rows[0].id;
         const kodeAktivasi = makeKodeAktivasi(bookingId);
 
-        // Simpan kode aktivasi
         await db.query(
             `UPDATE bookings SET kode_aktivasi = $1 WHERE id = $2`,
             [kodeAktivasi, bookingId]
@@ -180,7 +182,7 @@ app.post("/api/booking", async (req, res) => {
 });
 
 // ======================================================
-// API — AKTIVASI KODE (Customer Telat)
+// API — AKTIVASI KODE
 // ======================================================
 app.post("/api/aktivasi", async (req, res) => {
     try {
@@ -222,14 +224,15 @@ app.post("/api/aktivasi", async (req, res) => {
             [booking.id]
         );
 
+        // FIX: lastShake sudah dideklarasi di atas, tidak akan ReferenceError lagi
         lastShake[booking.meja_id] = Date.now();
 
         log(`🔑 AKTIVASI → ${kode} | Meja ${booking.meja_id} ON`);
 
         res.json({
             message: `✅ Lampu Meja ${booking.meja_id} berhasil dinyalakan!`,
-            meja_id:    booking.meja_id,
-            nama:       booking.nama,
+            meja_id:     booking.meja_id,
+            nama:        booking.nama,
             jam_selesai: booking.jam_selesai
         });
 
@@ -280,9 +283,9 @@ app.get("/api/status-meja", async (req, res) => {
 });
 
 // ======================================================
-// API — RESET MEJA
+// API — RESET MEJA (FIX: pakai requireAdmin)
 // ======================================================
-app.post("/api/reset-meja", async (req, res) => {
+app.post("/api/reset-meja", requireAdmin, async (req, res) => {
     try {
         await db.query("UPDATE meja_billiard SET status_lampu = FALSE");
         await db.query(`
@@ -323,9 +326,6 @@ app.post("/api/lampu/control", requireAdmin, async (req, res) => {
 // ======================================================
 // SENSOR GETAR
 // ======================================================
-let lastShake         = { 1: Date.now(), 2: Date.now() };
-const SHAKE_TIMEOUT_MS = 15 * 60 * 1000; // 15 menit
-
 app.post("/api/shake", async (req, res) => {
     try {
         const { meja_id, reset_only } = req.body;
@@ -334,11 +334,9 @@ app.post("/api/shake", async (req, res) => {
             return res.status(400).json({ error: "meja_id tidak valid" });
         }
 
-        // Reset timer — selalu dilakukan
         lastShake[meja_id] = Date.now();
         log("🔔 AKTIVITAS → Meja " + meja_id);
 
-        // Hanya nyalain lampu kalau bukan reset_only
         if (!reset_only) {
             pushCommand(`ON${meja_id}`);
             await db.query(
@@ -450,8 +448,9 @@ cron.schedule("* * * * *", async () => {
 
 // ======================================================
 // CRON SENSOR — Auto OFF 15 menit tidak ada getaran
+// FIX: ganti dari tiap detik (* * * * * *) ke tiap menit (* * * * *)
 // ======================================================
-cron.schedule("* * * * * *", async () => {
+cron.schedule("* * * * *", async () => {
     const now = Date.now();
     for (let meja = 1; meja <= 2; meja++) {
         if ((now - lastShake[meja]) > SHAKE_TIMEOUT_MS) {
@@ -474,7 +473,6 @@ cron.schedule("* * * * * *", async () => {
                         "UPDATE meja_billiard SET status_lampu = FALSE WHERE id = $1",
                         [meja]
                     );
-                    // Status booking tetap 'active' agar bisa aktivasi pakai kode
                 }
                 lastShake[meja] = now;
             } catch (err) {
@@ -483,6 +481,7 @@ cron.schedule("* * * * * *", async () => {
         }
     }
 });
+
 // ======================================================
 // API — STATISTIK BOOKING
 // ======================================================
@@ -513,8 +512,6 @@ app.get("/api/statistik", async (req, res) => {
     }
 });
 
-
-
 // ======================================================
 // API — KONFIRMASI PEMBAYARAN (Admin)
 // ======================================================
@@ -531,7 +528,6 @@ app.post("/api/konfirmasi-bayar", requireAdmin, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 
 // ======================================================
 // START SERVER

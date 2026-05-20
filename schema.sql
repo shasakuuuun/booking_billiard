@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS bookings (
     tanggal DATE NOT NULL DEFAULT CURRENT_DATE,
     durasi INTEGER NOT NULL,
     status VARCHAR(20) DEFAULT 'pending',
+    status_bayar VARCHAR(20) DEFAULT 'belum',   -- FIX: kolom pembayaran
+    total_harga INTEGER DEFAULT 0,              -- FIX: kolom total harga
     kode_aktivasi VARCHAR(20) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -32,11 +34,19 @@ CREATE INDEX IF NOT EXISTS idx_bookings_tanggal ON bookings(tanggal);
 CREATE INDEX IF NOT EXISTS idx_bookings_meja ON bookings(meja_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_kode ON bookings(kode_aktivasi);
 
--- Insert data awal meja
+-- Insert data awal meja (10 meja sesuai UI)
 INSERT INTO meja_billiard (nama_meja, status_lampu)
 VALUES 
-    ('Meja 1', FALSE),
-    ('Meja 2', FALSE)
+    ('Meja 1',  FALSE),
+    ('Meja 2',  FALSE),
+    ('Meja 3',  FALSE),
+    ('Meja 4',  FALSE),
+    ('Meja 5',  FALSE),
+    ('Meja 6',  FALSE),
+    ('Meja 7',  FALSE),
+    ('Meja 8',  FALSE),
+    ('Meja 9',  FALSE),
+    ('Meja 10', FALSE)
 ON CONFLICT DO NOTHING;
 
 -- Verifikasi

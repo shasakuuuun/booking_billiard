@@ -596,8 +596,12 @@ async function globalControl(act) {
 // ==================== RESET ====================
 async function resetMeja() {
   if (!confirm("Reset semua meja? Semua booking akan ditandai selesai.")) return;
+  if (!adminToken) return toast("Session expired, silakan login ulang", "error");
   try {
-    const r = await fetch(API + "/api/reset-meja", { method: "POST" });
+    const r = await fetch(API + "/api/reset-meja", {
+      method: "POST",
+      headers: { "Authorization": adminToken }
+    });
     const d = await r.json();
     if (r.ok) toast("Reset berhasil!", "success");
     else toast("Gagal reset", "error");
