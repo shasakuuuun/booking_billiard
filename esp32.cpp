@@ -18,7 +18,7 @@ String serverUrl = "http://10.56.202.200:3000";
 
 // ================== KONFIGURASI ==================
 #define SHAKE_DEBOUNCE_MS   500    // Debounce antar getaran
-#define SHAKE_COOLDOWN_MS   10000  // Cooldown reset timer ke server (10 detik)
+#define SHAKE_COOLDOWN_MS   5000  // 5 detik (demo)
 
 // ================== STATE ==================
 unsigned long lastShakeTime1 = 0;

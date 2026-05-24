@@ -1,6 +1,6 @@
 //====================================================================
 // SMART BILLIARD SERVER - PostgreSQL Version
-// (FIXED: requireAdmin header case-insensitive, lastShake posisi,
+// (FIXED: session persistent ke DB, requireAdmin, lastShake,
 //         cron sensor tiap menit, reset-meja pakai auth)
 //====================================================================
 
@@ -37,7 +37,6 @@ const ADMIN = {
     username: process.env.ADMIN_USERNAME || "admin",
     password: process.env.ADMIN_PASSWORD || "billiard123"
 };
-let adminSessions = new Set();
 
 function makeToken() {
     return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -49,13 +48,23 @@ function makeKodeAktivasi(bookingId) {
     return `BIL-${pad}-${year}`;
 }
 
-// FIX: header bisa huruf besar/kecil (Authorization atau authorization)
-function requireAdmin(req, res, next) {
+// FIX: session dicek ke database, tidak hilang saat server restart
+async function requireAdmin(req, res, next) {
     const token = req.headers["authorization"] || req.headers["Authorization"];
-    if (!token || !adminSessions.has(token)) {
-        return res.status(401).json({ error: "Unauthorized" });
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    try {
+        const result = await db.query(
+            "SELECT * FROM admin_sessions WHERE token = $1",
+            [token]
+        );
+        if (!result.rows.length) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        next();
+    } catch (err) {
+        log("❌ requireAdmin error: " + err);
+        res.status(500).json({ error: "Server error" });
     }
-    next();
 }
 
 // ======================================================
@@ -84,9 +93,9 @@ db.connect()
 // ======================================================
 let commandQueue = { 1: "", 2: "" };
 
-// FIX: lastShake dideklarasi di sini (sebelum semua route)
+// lastShake dideklarasi di sini (sebelum semua route)
 let lastShake          = { 1: Date.now(), 2: Date.now() };
-const SHAKE_TIMEOUT_MS = 15 * 60 * 1000; // 15 menit
+const SHAKE_TIMEOUT_MS = 25 * 1000; // 25 detik (demo)
 
 function pushCommand(cmd) {
     const meja = Number(cmd.replace(/\D/g, ""));
@@ -97,24 +106,40 @@ function pushCommand(cmd) {
 }
 
 // ======================================================
-// ADMIN LOGIN
+// ADMIN LOGIN — simpan token ke DB
 // ======================================================
-app.post("/api/admin/login", (req, res) => {
+app.post("/api/admin/login", async (req, res) => {
     const { username, password } = req.body;
     if (username === ADMIN.username && password === ADMIN.password) {
         const token = makeToken();
-        adminSessions.add(token);
-        log("🔐 ADMIN LOGIN SUCCESS");
-        return res.json({ token, username });
+        try {
+            await db.query(
+                "INSERT INTO admin_sessions (token, username) VALUES ($1, $2)",
+                [token, username]
+            );
+            log("🔐 ADMIN LOGIN SUCCESS");
+            return res.json({ token, username });
+        } catch (err) {
+            log("❌ Simpan session error: " + err);
+            return res.status(500).json({ error: "Server error" });
+        }
     }
     log("❌ ADMIN LOGIN FAILED");
     res.status(401).json({ error: "Username atau password salah" });
 });
 
-app.post("/api/admin/verify", (req, res) => {
+app.post("/api/admin/verify", async (req, res) => {
     const { token } = req.body;
-    if (adminSessions.has(token)) return res.json({ valid: true });
-    res.status(401).json({ error: "Token tidak valid" });
+    try {
+        const result = await db.query(
+            "SELECT * FROM admin_sessions WHERE token = $1",
+            [token]
+        );
+        if (result.rows.length) return res.json({ valid: true });
+        res.status(401).json({ error: "Token tidak valid" });
+    } catch (err) {
+        res.status(500).json({ error: "Server error" });
+    }
 });
 
 // ======================================================
@@ -224,7 +249,6 @@ app.post("/api/aktivasi", async (req, res) => {
             [booking.id]
         );
 
-        // FIX: lastShake sudah dideklarasi di atas, tidak akan ReferenceError lagi
         lastShake[booking.meja_id] = Date.now();
 
         log(`🔑 AKTIVASI → ${kode} | Meja ${booking.meja_id} ON`);
@@ -283,7 +307,7 @@ app.get("/api/status-meja", async (req, res) => {
 });
 
 // ======================================================
-// API — RESET MEJA (FIX: pakai requireAdmin)
+// API — RESET MEJA (pakai requireAdmin)
 // ======================================================
 app.post("/api/reset-meja", requireAdmin, async (req, res) => {
     try {
@@ -397,7 +421,7 @@ app.get("/api/esp-command", (req, res) => {
 // ======================================================
 // CRON — BOOKING AUTO ON/OFF (setiap menit)
 // ======================================================
-cron.schedule("* * * * *", async () => {
+cron.schedule("* * * * * *", async () => { // tiap detik (demo)
     try {
         const now = new Date();
         const t   = now.toTimeString().slice(0, 5);
@@ -447,10 +471,9 @@ cron.schedule("* * * * *", async () => {
 });
 
 // ======================================================
-// CRON SENSOR — Auto OFF 15 menit tidak ada getaran
-// FIX: ganti dari tiap detik (* * * * * *) ke tiap menit (* * * * *)
+// CRON SENSOR — Auto OFF 15 menit tidak ada getaran (tiap menit)
 // ======================================================
-cron.schedule("* * * * *", async () => {
+cron.schedule("* * * * * *", async () => { // tiap detik (demo)
     const now = Date.now();
     for (let meja = 1; meja <= 2; meja++) {
         if ((now - lastShake[meja]) > SHAKE_TIMEOUT_MS) {
