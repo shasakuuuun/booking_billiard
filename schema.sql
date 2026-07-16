@@ -29,10 +29,19 @@ CREATE TABLE IF NOT EXISTS bookings (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Tabel sesi login admin
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    id SERIAL PRIMARY KEY,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    username VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Index biar query cepat
 CREATE INDEX IF NOT EXISTS idx_bookings_tanggal ON bookings(tanggal);
 CREATE INDEX IF NOT EXISTS idx_bookings_meja ON bookings(meja_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_kode ON bookings(kode_aktivasi);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_token ON admin_sessions(token);
 
 -- Insert data awal meja (10 meja sesuai UI)
 INSERT INTO meja_billiard (nama_meja, status_lampu)

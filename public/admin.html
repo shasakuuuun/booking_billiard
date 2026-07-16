@@ -567,7 +567,7 @@ async function manual(id, act) {
   try {
     const r = await fetch(API + "/api/manual-control", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": adminToken },
       body: JSON.stringify({ meja_id: id, action: act })
     });
     const d = await r.json();
