@@ -1,7 +1,7 @@
-const express  = require("express");
+const express = require("express");
 const { Pool } = require("pg");
-const cors     = require("cors");
-const cron     = require("node-cron");
+const cors    = require("cors");
+const cron    = require("node-cron");
 require("dotenv").config();
 
 const app  = express();
@@ -21,19 +21,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-// ======================================================
-// GLOBAL ERROR HANDLER
-// ======================================================
-process.on("uncaughtException", (err) => {
-    log("❌ Uncaught Exception : " + err);
-});
-
-process.on("unhandledRejection", (err) => {
-    log("❌ Unhandled Rejection : " + err);
-});
+process.on("uncaughtException",  err => log("❌ Uncaught    : " + err));
+process.on("unhandledRejection", err => log("❌ Unhandled   : " + err));
 
 // ======================================================
-// ADMIN AUTH
+// ADMIN CREDENTIALS
 // ======================================================
 const ADMIN = {
     username: process.env.ADMIN_USERNAME || "admin",
@@ -44,435 +36,247 @@ const ADMIN = {
 // GENERATE TOKEN
 // ======================================================
 function makeToken() {
-    return (
-        Math.random().toString(36).substring(2) +
-        Date.now().toString(36)
-    );
+    return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
 // ======================================================
-// GENERATE KODE AKTIVASI
+// GENERATE KODE AKTIVASI — Format: BIL-001-2025
 // ======================================================
 function makeKodeAktivasi(bookingId) {
-    const pad = String(bookingId).padStart(3, "0");
+    const pad  = String(bookingId).padStart(3, "0");
     const year = new Date().getFullYear();
-
     return `BIL-${pad}-${year}`;
-}
-
-// ======================================================
-// AUTH MIDDLEWARE
-// Session dicek ke database
-// ======================================================
-async function requireAdmin(req, res, next) {
-
-    const token =
-        req.headers["authorization"] ||
-        req.headers["Authorization"];
-
-    if (!token) {
-        return res.status(401).json({
-            error: "Unauthorized"
-        });
-    }
-
-    try {
-
-        const result = await db.query(
-            `
-            SELECT *
-            FROM admin_sessions
-            WHERE token = $1
-            LIMIT 1
-            `,
-            [token]
-        );
-
-        if (!result.rows.length) {
-            return res.status(401).json({
-                error: "Unauthorized"
-            });
-        }
-
-        next();
-
-    } catch (err) {
-
-        log("❌ requireAdmin : " + err);
-
-        return res.status(500).json({
-            error: "Server Error"
-        });
-
-    }
-
 }
 
 // ======================================================
 // POSTGRESQL CONNECTION
 // ======================================================
 const db = new Pool({
-    host: process.env.DB_HOST || "localhost",
-    port: process.env.DB_PORT || 5432,
-    user: process.env.DB_USER || "postgres",
+    host:     process.env.DB_HOST     || "localhost",
+    port:     process.env.DB_PORT     || 5432,
+    user:     process.env.DB_USER     || "postgres",
     password: process.env.DB_PASSWORD || "",
     database: process.env.DB_DATABASE || "billiard_booking"
 });
 
 db.connect()
-    .then(client => {
+    .then(async client => {
         log("✅ PostgreSQL Connected");
         client.release();
+
+        // Auto-migrate: buat tabel admin_sessions kalau belum ada
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS admin_sessions (
+                id SERIAL PRIMARY KEY,
+                token VARCHAR(100) NOT NULL UNIQUE,
+                username VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        log("✅ Tabel admin_sessions siap");
+
+        // Auto-migrate kolom status_bayar & total_harga
+        await db.query(`
+            ALTER TABLE bookings
+            ADD COLUMN IF NOT EXISTS status_bayar VARCHAR(20) DEFAULT 'belum'
+        `).catch(() => {});
+        await db.query(`
+            ALTER TABLE bookings
+            ADD COLUMN IF NOT EXISTS total_harga INTEGER DEFAULT 0
+        `).catch(() => {});
+        log("✅ Kolom status_bayar & total_harga siap");
     })
     .catch(err => {
         log("❌ PostgreSQL Failed : " + err.message);
-        log("💡 Cek PostgreSQL dan file .env");
     });
+
+// ======================================================
+// AUTH MIDDLEWARE — Token dicek ke database
+// ======================================================
+async function requireAdmin(req, res, next) {
+    const token = req.headers["authorization"] || req.headers["Authorization"];
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+    try {
+        const result = await db.query(
+            "SELECT id FROM admin_sessions WHERE token=$1 LIMIT 1",
+            [token]
+        );
+        if (!result.rows.length) return res.status(401).json({ error: "Unauthorized" });
+        next();
+    } catch (err) {
+        log("❌ requireAdmin : " + err);
+        return res.status(500).json({ error: "Server Error" });
+    }
+}
 
 // ======================================================
 // ESP COMMAND QUEUE
 // ======================================================
-let commandQueue = {
-    1: "",
-    2: ""
-};
+let commandQueue = { 1: "", 2: "" };
 
-// ======================================================
-// MODE MANUAL
-// true  = Cron tidak mengubah lampu
-// false = Cron bekerja normal
-// ======================================================
-let manualMode = {
-    1: false,
-    2: false
-};
-// ======================================================
-// STATUS TIMEOUT SENSOR
-// ======================================================
-let sensorTimeout = {
-    1: false,
-    2: false
-};
-
-// ======================================================
-// LAST SHAKE
-// ======================================================
-let lastShake = {
-    1: Date.now(),
-    2: Date.now()
-};
-
-// ======================================================
-// SHAKE TIMEOUT
-// Demo = 25 detik
-// Produksi = 15 * 60 * 1000
-// ======================================================
-const SHAKE_TIMEOUT_MS = 25 * 1000;
-
-// ======================================================
-// PUSH COMMAND KE ESP32
-// ======================================================
 function pushCommand(cmd) {
-
     if (!cmd) return;
-
     const meja = Number(cmd.replace(/\D/g, ""));
-
-    if (meja !== 1 && meja !== 2) {
-        return;
-    }
-
+    if (meja !== 1 && meja !== 2) return;
     commandQueue[meja] = cmd;
-
     log(`📡 QUEUE -> ${cmd}`);
 }
+
+// ======================================================
+// STATE VARIABLES
+// ======================================================
+
+// Mode manual: true = cron tidak override lampu
+let manualMode = { 1: false, 2: false };
+
+// Sensor timeout: true = lampu dimatikan sensor, tunggu aktivasi kode
+let sensorTimeout = { 1: false, 2: false };
+
+// Waktu terakhir ada getaran
+let lastShake = { 1: Date.now(), 2: Date.now() };
+
+// Timeout sensor (25 detik untuk demo, 15 menit untuk produksi)
+// Untuk produksi ganti ke: 15 * 60 * 1000
+const SHAKE_TIMEOUT_MS = 25 * 1000;
 
 // ======================================================
 // ADMIN LOGIN
 // ======================================================
 app.post("/api/admin/login", async (req, res) => {
-
     try {
-
         const { username, password } = req.body;
 
-        if (
-            username !== ADMIN.username ||
-            password !== ADMIN.password
-        ) {
+        if (username !== ADMIN.username || password !== ADMIN.password) {
             log("❌ ADMIN LOGIN FAILED");
-
-            return res.status(401).json({
-                error: "Username atau Password salah"
-            });
+            return res.status(401).json({ error: "Username atau Password salah" });
         }
 
         const token = makeToken();
 
         await db.query(
-            `
-            INSERT INTO admin_sessions(token,username)
-            VALUES($1,$2)
-            `,
+            "INSERT INTO admin_sessions(token, username) VALUES($1,$2)",
             [token, username]
         );
 
         log("🔐 ADMIN LOGIN SUCCESS");
-
-        return res.json({
-            token,
-            username
-        });
+        return res.json({ token, username });
 
     } catch (err) {
-
         log("❌ Login Error : " + err);
-
-        return res.status(500).json({
-            error: "Server Error"
-        });
-
+        return res.status(500).json({ error: "Server Error" });
     }
-
 });
 
 // ======================================================
 // VERIFY TOKEN
 // ======================================================
 app.post("/api/admin/verify", async (req, res) => {
-
     try {
-
         const { token } = req.body;
-
         const result = await db.query(
-            `
-            SELECT id
-            FROM admin_sessions
-            WHERE token=$1
-            LIMIT 1
-            `,
+            "SELECT id FROM admin_sessions WHERE token=$1 LIMIT 1",
             [token]
         );
-
-        return res.json({
-            valid: result.rows.length > 0
-        });
-
+        return res.json({ valid: result.rows.length > 0 });
     } catch (err) {
-
         log("❌ Verify Error : " + err);
-
-        return res.status(500).json({
-            valid: false
-        });
-
+        return res.status(500).json({ valid: false });
     }
-
 });
 
 // ======================================================
 // GET BOOKINGS HARI INI
 // ======================================================
 app.get("/api/bookings", async (req, res) => {
-
     try {
-
         const result = await db.query(`
-            SELECT *
-            FROM bookings
+            SELECT * FROM bookings
             WHERE tanggal = CURRENT_DATE
             ORDER BY jam_mulai ASC
         `);
-
         res.json(result.rows);
-
     } catch (err) {
-
         log("❌ Load Booking : " + err);
-
-        res.status(500).json({
-            error: err.message
-        });
-
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
 // TAMBAH BOOKING
 // ======================================================
 app.post("/api/booking", async (req, res) => {
-
     try {
-
-        const {
-            nama,
-            jam_mulai,
-            durasi,
-            meja_id
-        } = req.body;
-
-        // =====================
-        // VALIDASI
-        // =====================
+        const { nama, jam_mulai, durasi, meja_id } = req.body;
 
         if (!nama || !jam_mulai || !durasi || !meja_id) {
-
-            return res.status(400).json({
-                error: "Semua field wajib diisi."
-            });
-
+            return res.status(400).json({ error: "Semua field wajib diisi." });
         }
-
         if (durasi <= 0) {
-
-            return res.status(400).json({
-                error: "Durasi tidak valid."
-            });
-
+            return res.status(400).json({ error: "Durasi tidak valid." });
         }
 
-        if (![1, 2].includes(Number(meja_id))) {
+        // Hitung jam selesai
+        const start       = new Date(`1970-01-01T${jam_mulai}:00`);
+        const end         = new Date(start.getTime() + durasi * 3600000);
+        const jam_selesai = end.toTimeString().slice(0, 5);
 
-            return res.status(400).json({
-                error: "Meja tidak tersedia."
-            });
-
-        }
-
-        // =====================
-        // HITUNG JAM SELESAI
-        // =====================
-
-        const start = new Date(`1970-01-01T${jam_mulai}:00`);
-
-        const end = new Date(
-            start.getTime() + (durasi * 60 * 60 * 1000)
-        );
-
-        const jam_selesai =
-            end.toTimeString().slice(0, 5);
-
-        // =====================
-        // TOTAL HARGA
-        // =====================
-
+        // Total harga
         const totalHarga = durasi * 30000;
 
-        // =====================
-        // INSERT BOOKING
-        // =====================
-
-        const insert = await db.query(
-            `
+        // Insert booking
+        const insert = await db.query(`
             INSERT INTO bookings
-            (
-                nama,
-                meja_id,
-                jam_mulai,
-                jam_selesai,
-                tanggal,
-                durasi,
-                status_bayar,
-                total_harga
-            )
+                (nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi, status_bayar, total_harga)
             VALUES
-            (
-                $1,
-                $2,
-                $3,
-                $4,
-                CURRENT_DATE,
-                $5,
-                'belum',
-                $6
-            )
+                ($1, $2, $3, $4, CURRENT_DATE, $5, 'belum', $6)
             RETURNING id
-            `,
-            [
-                nama,
-                meja_id,
-                jam_mulai,
-                jam_selesai,
-                durasi,
-                totalHarga
-            ]
-        );
+        `, [nama, meja_id, jam_mulai, jam_selesai, durasi, totalHarga]);
 
-        const bookingId = insert.rows[0].id;
-
-        const kodeAktivasi =
-            makeKodeAktivasi(bookingId);
+        const bookingId    = insert.rows[0].id;
+        const kodeAktivasi = makeKodeAktivasi(bookingId);
 
         await db.query(
-            `
-            UPDATE bookings
-            SET kode_aktivasi=$1
-            WHERE id=$2
-            `,
-            [
-                kodeAktivasi,
-                bookingId
-            ]
+            "UPDATE bookings SET kode_aktivasi=$1 WHERE id=$2",
+            [kodeAktivasi, bookingId]
         );
 
-        log(
-            `📅 BOOKING -> Meja ${meja_id} | ${jam_mulai}-${jam_selesai}`
-        );
+        // FIX: Reset sensor timeout untuk meja ini saat ada booking baru
+        sensorTimeout[meja_id] = false;
+
+        log(`📅 BOOKING -> Meja ${meja_id} | ${jam_mulai}-${jam_selesai} | Kode: ${kodeAktivasi}`);
 
         res.json({
-
-            success: true,
-
-            booking_id: bookingId,
-
+            success:       true,
+            booking_id:    bookingId,
             kode_aktivasi: kodeAktivasi,
-
             nama,
-
             meja_id,
-
             jam_mulai,
-
             jam_selesai,
-
             durasi,
-
-            total_harga: totalHarga
-
+            total_harga:   totalHarga
         });
 
     } catch (err) {
-
         log("❌ Booking Error : " + err);
-
-        res.status(500).json({
-            error: err.message
-        });
-
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
-// API — AKTIVASI BOOKING
+// AKTIVASI KODE (Customer Telat)
 // ======================================================
 app.post("/api/aktivasi", async (req, res) => {
-
     try {
-
         const { kode } = req.body;
 
         if (!kode) {
-            return res.status(400).json({
-                error: "Kode aktivasi tidak boleh kosong."
-            });
+            return res.status(400).json({ error: "Kode aktivasi tidak boleh kosong." });
         }
 
         const result = await db.query(`
-            SELECT *
-            FROM bookings
+            SELECT * FROM bookings
             WHERE kode_aktivasi = $1
               AND tanggal = CURRENT_DATE
               AND status != 'completed'
@@ -480,185 +284,102 @@ app.post("/api/aktivasi", async (req, res) => {
         `, [kode.trim().toUpperCase()]);
 
         if (!result.rows.length) {
-            return res.status(404).json({
-                error: "Kode tidak ditemukan atau booking telah selesai."
-            });
+            return res.status(404).json({ error: "Kode tidak ditemukan atau booking telah selesai." });
         }
 
         const booking = result.rows[0];
-
-        const now = new Date().toTimeString().slice(0,5);
+        const now     = new Date().toTimeString().slice(0, 5);
 
         if (now < booking.jam_mulai) {
-
-            return res.status(400).json({
-                error: `Booking dimulai pukul ${booking.jam_mulai}`
-            });
-
+            return res.status(400).json({ error: `Booking dimulai pukul ${booking.jam_mulai}` });
         }
 
-        // ======================================
-        // Booking mengambil alih kontrol lampu
-        // ======================================
-        manualMode[booking.meja_id] = false;
+        // FIX: Reset sensorTimeout dan manualMode saat aktivasi kode
+        sensorTimeout[booking.meja_id] = false;
+        manualMode[booking.meja_id]    = false;
+
+        // Reset timer sensor agar 25 detik/15 menit dihitung ulang
+        lastShake[booking.meja_id] = Date.now();
 
         pushCommand(`ON${booking.meja_id}`);
 
         await db.query(
-            `
-            UPDATE meja_billiard
-            SET status_lampu = TRUE
-            WHERE id = $1
-            `,
+            "UPDATE meja_billiard SET status_lampu=TRUE WHERE id=$1",
             [booking.meja_id]
         );
-
         await db.query(
-            `
-            UPDATE bookings
-            SET status='active'
-            WHERE id=$1
-            `,
+            "UPDATE bookings SET status='active' WHERE id=$1",
             [booking.id]
         );
 
-        lastShake[booking.meja_id] = Date.now();
-
-        log(
-            `🔑 AKTIVASI -> ${booking.kode_aktivasi} | Meja ${booking.meja_id}`
-        );
+        log(`🔑 AKTIVASI -> ${kode} | Meja ${booking.meja_id}`);
 
         res.json({
-
-            success:true,
-
-            meja_id:booking.meja_id,
-
-            nama:booking.nama,
-
-            jam_selesai:booking.jam_selesai,
-
-            message:`Lampu Meja ${booking.meja_id} berhasil dinyalakan`
-
+            success:     true,
+            meja_id:     booking.meja_id,
+            nama:        booking.nama,
+            jam_selesai: booking.jam_selesai,
+            message:     `Lampu Meja ${booking.meja_id} berhasil dinyalakan`
         });
 
-    } catch(err){
-
-        log("❌ Aktivasi Error : "+err);
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        log("❌ Aktivasi Error : " + err);
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
 // STATUS LAMPU
 // ======================================================
-app.get("/api/lampu/status", async(req,res)=>{
-
-    try{
-
-        const result=await db.query(`
-            SELECT *
-            FROM meja_billiard
-            ORDER BY id ASC
-        `);
-
+app.get("/api/lampu/status", async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM meja_billiard ORDER BY id ASC");
         res.json(result.rows);
-
-    }catch(err){
-
-        log("❌ Status Lampu : "+err);
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        log("❌ Status Lampu : " + err);
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
 // STATUS MEJA
 // ======================================================
-app.get("/api/status-meja",async(req,res)=>{
-
-    try{
-
-        const result=await db.query(`
-
+app.get("/api/status-meja", async (req, res) => {
+    try {
+        const result = await db.query(`
             SELECT
-
                 m.id,
-
                 m.nama_meja,
-
                 m.status_lampu,
-
                 COALESCE(
-
-                    (
-
-                        SELECT status
-
-                        FROM bookings
-
-                        WHERE meja_id=m.id
-
-                        AND tanggal=CURRENT_DATE
-
-                        AND status='active'
-
-                        LIMIT 1
-
-                    ),
-
+                    (SELECT status FROM bookings
+                     WHERE meja_id=m.id AND tanggal=CURRENT_DATE AND status='active'
+                     LIMIT 1),
                     'idle'
-
                 ) AS status_booking
-
             FROM meja_billiard m
-
             ORDER BY m.id ASC
-
         `);
-
         res.json(result.rows);
-
-    }catch(err){
-
-        log("❌ Status Meja : "+err);
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        log("❌ Status Meja : " + err);
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
-// API — RESET MEJA
+// RESET MEJA
 // ======================================================
 app.post("/api/reset-meja", requireAdmin, async (req, res) => {
-
     try {
+        // Reset semua state
+        manualMode    = { 1: false, 2: false };
+        sensorTimeout = { 1: false, 2: false };
+        lastShake     = { 1: Date.now(), 2: Date.now() };
 
-        // keluar dari mode manual
-        manualMode[1] = false;
-        manualMode[2] = false;
-
+        await db.query("UPDATE meja_billiard SET status_lampu=FALSE");
         await db.query(`
-            UPDATE meja_billiard
-            SET status_lampu = FALSE
-        `);
-
-        await db.query(`
-            UPDATE bookings
-            SET status='completed'
+            UPDATE bookings SET status='completed'
             WHERE tanggal=CURRENT_DATE
         `);
 
@@ -666,528 +387,357 @@ app.post("/api/reset-meja", requireAdmin, async (req, res) => {
         pushCommand("OFF2");
 
         log("♻ RESET SEMUA MEJA");
+        res.json({ success: true, message: "Reset berhasil." });
 
-        res.json({
-            success:true,
-            message:"Reset berhasil."
-        });
-
-    } catch(err){
-
-        log("❌ Reset Error : "+err);
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        log("❌ Reset Error : " + err);
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
 // GLOBAL CONTROL
 // ======================================================
-app.post("/api/lampu/control", requireAdmin, async (req,res)=>{
-
-    try{
-
+app.post("/api/lampu/control", requireAdmin, async (req, res) => {
+    try {
         const { action } = req.body;
 
-        if(!["ON","OFF"].includes(action)){
-            return res.status(400).json({
-                error:"Action harus ON/OFF"
-            });
+        if (!["ON", "OFF"].includes(action)) {
+            return res.status(400).json({ error: "Action harus ON/OFF" });
         }
 
-        const status = action==="ON";
+        const status = action === "ON";
 
-        // ============================
-        // GLOBAL = MODE MANUAL
-        // ============================
-        manualMode[1]=status;
-        manualMode[2]=status;
+        manualMode[1] = status;
+        manualMode[2] = status;
 
-        await db.query(
-            `
-            UPDATE meja_billiard
-            SET status_lampu=$1
-            `,
-            [status]
-        );
+        await db.query("UPDATE meja_billiard SET status_lampu=$1", [status]);
 
         pushCommand(`${action}1`);
         pushCommand(`${action}2`);
 
         log(`💡 GLOBAL ${action}`);
+        res.json({ success: true, message: `Semua lampu ${action}` });
 
-        res.json({
-            success:true,
-            message:`Semua lampu ${action}`
-        });
-
-    }catch(err){
-
-        log("❌ Global Error : "+err);
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        log("❌ Global Error : " + err);
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
 // SENSOR GETAR
+// reset_only=true  → hanya reset timer, lampu tidak berubah
+// reset_only=false → reset timer + nyalain lampu
 // ======================================================
-app.post("/api/shake", async(req,res)=>{
-
-    try{
-
+app.post("/api/shake", async (req, res) => {
+    try {
         const { meja_id, reset_only } = req.body;
 
-        if(![1,2].includes(Number(meja_id))){
-            return res.status(400).json({
-                error:"Meja tidak valid"
-            });
+        if (![1, 2].includes(Number(meja_id))) {
+            return res.status(400).json({ error: "Meja tidak valid" });
         }
 
+        // FIX: Selalu update lastShake saat ada getaran
         lastShake[meja_id] = Date.now();
 
-        // Reset status timeout karena ada aktivitas lagi
+        // FIX: Reset sensorTimeout saat ada aktivitas
+        // Ini penting agar cron booking bisa nyalain lampu lagi
         sensorTimeout[meja_id] = false;
 
-        log(`🔔 SENSOR -> Meja ${meja_id}`);
+        log(`🔔 SENSOR -> Meja ${meja_id} | reset_only=${reset_only}`);
 
-        if(!reset_only){
-
-            manualMode[meja_id]=false;
-
+        if (!reset_only) {
+            // Mode lama: nyalain lampu + reset timer
+            manualMode[meja_id] = false;
             pushCommand(`ON${meja_id}`);
-
-            lastShake[meja_id] = Date.now();
-            sensorTimeout[meja_id] = false;
-
-            log(`🟢 Booking Aktif -> Reset Timer Sensor Meja ${meja_id}`);
-            
             await db.query(
-                `
-                UPDATE meja_billiard
-                SET status_lampu=TRUE
-                WHERE id=$1
-                `,
+                "UPDATE meja_billiard SET status_lampu=TRUE WHERE id=$1",
                 [meja_id]
             );
-
             log(`💡 Lampu ON -> Meja ${meja_id}`);
-
-        }else{
-
-            log(`⏱ Timer Reset -> Meja ${meja_id}`);
-
+        } else {
+            // Mode baru: HANYA reset timer, lampu tidak berubah
+            log(`⏱ Timer Reset -> Meja ${meja_id} (lampu tidak berubah)`);
         }
 
-        res.json({
-            success:true
-        });
+        res.json({ success: true });
 
-    }catch(err){
-
-        log("❌ Shake Error : "+err);
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        log("❌ Shake Error : " + err);
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
 // MANUAL CONTROL
 // ======================================================
 app.post("/api/manual-control", requireAdmin, async (req, res) => {
-
     try {
-
         const { meja_id, action } = req.body;
 
-        if (![1,2].includes(Number(meja_id))) {
-            return res.status(400).json({
-                error: "Meja tidak valid"
-            });
+        if (![1, 2].includes(Number(meja_id))) {
+            return res.status(400).json({ error: "Meja tidak valid" });
         }
-
-        if (!["ON","OFF"].includes(action)) {
-            return res.status(400).json({
-                error: "Action harus ON/OFF"
-            });
+        if (!["ON", "OFF"].includes(action)) {
+            return res.status(400).json({ error: "Action harus ON/OFF" });
         }
 
         const status = action === "ON";
 
-        // ===============================
-        // MANUAL MODE
-        // ===============================
         manualMode[meja_id] = status;
 
         await db.query(
-            `
-            UPDATE meja_billiard
-            SET status_lampu=$1
-            WHERE id=$2
-            `,
+            "UPDATE meja_billiard SET status_lampu=$1 WHERE id=$2",
             [status, meja_id]
         );
 
         pushCommand(`${action}${meja_id}`);
 
         log(`💡 MANUAL ${action} -> Meja ${meja_id}`);
+        res.json({ success: true, message: `Lampu meja ${meja_id} ${action}` });
 
-        res.json({
-            success:true,
-            message:`Lampu meja ${meja_id} ${action}`
-        });
-
-    } catch(err){
-
-        log("❌ Manual Error : "+err);
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        log("❌ Manual Error : " + err);
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
-// ESP32 COMMAND
+// ESP32 COMMAND FETCHER
 // ======================================================
-app.get("/api/esp-command",(req,res)=>{
+app.get("/api/esp-command", (req, res) => {
+    try {
+        const meja = parseInt(req.query.meja || "0");
+        const cmd  = commandQueue[meja] || "";
 
-    try{
-
-        const meja=parseInt(req.query.meja||"0");
-
-        const cmd=commandQueue[meja]||"";
-
-        if(cmd){
-
+        if (cmd) {
             log(`📤 SEND -> ${cmd}`);
-
-            commandQueue[meja]="";
-
+            commandQueue[meja] = "";
             return res.send(cmd);
-
         }
 
         return res.send("");
-
-    }catch(err){
-
-        log("❌ ESP COMMAND : "+err);
-
+    } catch (err) {
+        log("❌ ESP COMMAND : " + err);
         res.send("");
-
     }
-
 });
 
 // ======================================================
-// CRON BOOKING
-// DEMO = TIAP DETIK
-// PRODUKSI = "* * * * *"
+// CRON BOOKING — Cek tiap detik (demo)
+// Produksi ganti ke: "* * * * *" (tiap menit)
 // ======================================================
-cron.schedule("* * * * * *", async()=>{
+cron.schedule("* * * * * *", async () => {
+    try {
+        const now = new Date();
+        const t   = now.toTimeString().slice(0, 5);
+        const d   = now.toISOString().slice(0, 10);
 
-    try{
+        const mejaList = await db.query("SELECT * FROM meja_billiard ORDER BY id ASC");
 
-        const now=new Date();
+        for (const meja of mejaList.rows) {
 
-        const t=now.toTimeString().slice(0,5);
+            // Skip jika mode manual aktif
+            if (manualMode[meja.id]) continue;
 
-        const d=now.toISOString().slice(0,10);
+            // FIX: Skip jika lampu dimatikan sensor
+            // Tunggu customer input kode aktivasi
+            if (sensorTimeout[meja.id]) continue;
 
-        const mejaList=await db.query(
-            "SELECT * FROM meja_billiard ORDER BY id ASC"
-        );
+            const booking = await db.query(`
+                SELECT * FROM bookings
+                WHERE meja_id=$1 AND tanggal=$2 AND status!='completed'
+            `, [meja.id, d]);
 
-        for(const meja of mejaList.rows){
+            let aktif    = false;
+            let activeId = null;
 
-            // ==========================
-            // MANUAL MODE
-            // ==========================
-            if(manualMode[meja.id]){
-                continue;
-            }
-            // Jika lampu dimatikan oleh sensor,
-            // jangan dinyalakan lagi selama booking yang sama.
-            if(sensorTimeout[meja.id]){
-                continue;
-            }
+            for (const b of booking.rows) {
+                const active = b.jam_mulai < b.jam_selesai
+                    ? (t >= b.jam_mulai && t < b.jam_selesai)
+                    : (t >= b.jam_mulai || t < b.jam_selesai);
 
-            const booking=await db.query(`
-                SELECT *
-                FROM bookings
-                WHERE meja_id=$1
-                AND tanggal=$2
-                AND status!='completed'
-            `,[meja.id,d]);
-
-            let aktif=false;
-
-            let activeId=null;
-
-            for(const b of booking.rows){
-
-                const active=b.jam_mulai<b.jam_selesai
-                ? (t>=b.jam_mulai && t<b.jam_selesai)
-                : (t>=b.jam_mulai || t<b.jam_selesai);
-
-                if(active){
-
-                    aktif=true;
-
-                    activeId=b.id;
-
+                if (active) {
+                    aktif    = true;
+                    activeId = b.id;
                     break;
-
                 }
-
             }
 
             if (aktif) {
-
+                // FIX: Hanya nyalain dan reset timer saat lampu baru pertama menyala
                 if (!meja.status_lampu) {
-
                     pushCommand(`ON${meja.id}`);
 
-                    // Booking baru dimulai
-                    // Mulai hitung timer sensor dari sekarang
-                    lastShake[meja.id] = Date.now();
+                    // FIX: Reset timer sensor saat booking mulai
+                    lastShake[meja.id]     = Date.now();
+                    sensorTimeout[meja.id] = false;
 
-                    log(`🟢 Booking Aktif -> Reset Timer Sensor Meja ${meja.id}`);
-
+                    log(`🟢 AUTO ON -> Meja ${meja.id} | Timer sensor dimulai`);
                 }
 
                 await db.query(
-                    `
-                    UPDATE meja_billiard
-                    SET status_lampu=TRUE
-                    WHERE id=$1
-                    `,
+                    "UPDATE meja_billiard SET status_lampu=TRUE WHERE id=$1",
                     [meja.id]
                 );
-
                 await db.query(
-                    `
-                    UPDATE bookings
-                    SET status='active'
-                    WHERE id=$1
-                    `,
+                    "UPDATE bookings SET status='active' WHERE id=$1",
                     [activeId]
                 );
 
-
-
-            }else{
-
-                // ==========================
-                // KIRIM OFF SEKALI SAJA
-                // ==========================
-                if(meja.status_lampu){
-
+            } else {
+                // Tidak ada booking aktif → matikan lampu
+                if (meja.status_lampu) {
                     pushCommand(`OFF${meja.id}`);
-
+                    log(`⚫ AUTO OFF -> Meja ${meja.id}`);
                 }
 
                 await db.query(
-                    `
-                    UPDATE meja_billiard
-                    SET status_lampu=FALSE
-                    WHERE id=$1
-                    `,
+                    "UPDATE meja_billiard SET status_lampu=FALSE WHERE id=$1",
                     [meja.id]
                 );
-
                 await db.query(`
-                    UPDATE bookings
-                    SET status='completed'
-                    WHERE meja_id=$1
-                    AND tanggal=$2
-                    AND jam_selesai<=$3
-                `,[meja.id,d,t]);
+                    UPDATE bookings SET status='completed'
+                    WHERE meja_id=$1 AND tanggal=$2 AND jam_selesai<=$3
+                `, [meja.id, d, t]);
 
+                // FIX: Reset sensorTimeout saat booking selesai
+                sensorTimeout[meja.id] = false;
             }
-
         }
 
-    }catch(err){
-
-        log("❌ CRON BOOKING : "+err);
-
+    } catch (err) {
+        log("❌ CRON BOOKING : " + err);
     }
-
 });
 
 // ======================================================
-// CRON SENSOR
+// CRON SENSOR — Auto OFF jika tidak ada getaran
+// FIX: Tidak reset lastShake setelah timeout
+//      agar tidak langsung trigger ulang
 // ======================================================
-cron.schedule("* * * * * *",async()=>{
+cron.schedule("* * * * * *", async () => {
+    try {
+        const now = Date.now();
 
-    try{
+        for (let meja = 1; meja <= 2; meja++) {
 
-        const now=Date.now();
+            // Skip jika mode manual aktif
+            if (manualMode[meja]) continue;
 
-        for(let meja=1;meja<=2;meja++){
+            // Skip jika sudah timeout (sudah dimatikan)
+            if (sensorTimeout[meja]) continue;
 
-            // ==========================
-            // JANGAN GANGGU MANUAL MODE
-            // ==========================
-            if(manualMode[meja]){
-                continue;
-            }
+            // Cek apakah sudah melewati batas waktu
+            if ((now - lastShake[meja]) > SHAKE_TIMEOUT_MS) {
 
-            if((now-lastShake[meja])>SHAKE_TIMEOUT_MS){
+                const t = new Date().toTimeString().slice(0, 5);
+                const d = new Date().toISOString().slice(0, 10);
 
-                const t=new Date().toTimeString().slice(0,5);
-
-                const d=new Date().toISOString().slice(0,10);
-
-                const aktif=await db.query(`
-                    SELECT id
-                    FROM bookings
+                // Cek apakah ada booking aktif
+                const aktif = await db.query(`
+                    SELECT id FROM bookings
                     WHERE meja_id=$1
-                    AND tanggal=$2
-                    AND status='active'
-                    AND jam_mulai<=$3
-                    AND jam_selesai>$3
+                      AND tanggal=$2
+                      AND status='active'
+                      AND jam_mulai<=$3
+                      AND jam_selesai>$3
                     LIMIT 1
-                `,[meja,d,t]);
+                `, [meja, d, t]);
 
-                if(aktif.rows.length){
+                if (aktif.rows.length) {
 
-                    const lampu=await db.query(
+                    // Cek apakah lampu masih nyala
+                    const lampu = await db.query(
                         "SELECT status_lampu FROM meja_billiard WHERE id=$1",
                         [meja]
                     );
 
-                    if(lampu.rows[0].status_lampu){
+                    if (lampu.rows[0].status_lampu) {
 
-                        log(`⌛ Timeout Sensor Meja ${meja}`);
+                        log(`⌛ SENSOR TIMEOUT -> Meja ${meja} | Tidak ada aktivitas ${SHAKE_TIMEOUT_MS/1000} detik`);
 
+                        // FIX: Set sensorTimeout = true SEBELUM matiin lampu
+                        // agar cron booking tidak langsung nyalain lagi
                         sensorTimeout[meja] = true;
 
                         pushCommand(`OFF${meja}`);
 
                         await db.query(
-                            `
-                            UPDATE meja_billiard
-                            SET status_lampu=FALSE
-                            WHERE id=$1
-                            `,
+                            "UPDATE meja_billiard SET status_lampu=FALSE WHERE id=$1",
                             [meja]
                         );
 
-                        log(`⚫ AUTO OFF SENSOR -> Meja ${meja}`);
+                        log(`⚫ AUTO OFF SENSOR -> Meja ${meja} | Gunakan kode aktivasi untuk menyalakan`);
 
+                        // FIX: TIDAK update lastShake di sini
+                        // lastShake hanya diupdate saat ada getaran dari ESP32
+                        // atau saat customer aktivasi kode
                     }
-
                 }
-
-                lastShake[meja]=now;
-
             }
-
         }
 
-    }catch(err){
-
-        log("❌ SENSOR CRON : "+err);
-
+    } catch (err) {
+        log("❌ SENSOR CRON : " + err);
     }
-
 });
 
 // ======================================================
-// STATISTIK
+// STATISTIK BOOKING
 // ======================================================
-app.get("/api/statistik",async(req,res)=>{
+app.get("/api/statistik", async (req, res) => {
+    try {
+        const days = parseInt(req.query.days || 30);
 
-    try{
-
-        const days=parseInt(req.query.days||30);
-
-        const result=await db.query(`
+        const result = await db.query(`
             SELECT
-            gs.tanggal::date AS tanggal,
-            COALESCE(COUNT(b.id),0) AS total_booking,
-            COALESCE(SUM(b.durasi),0) AS total_jam
+                gs.tanggal::date AS tanggal,
+                COALESCE(COUNT(b.id), 0)   AS total_booking,
+                COALESCE(SUM(b.durasi), 0) AS total_jam
             FROM generate_series(
-                CURRENT_DATE-INTERVAL '1 day'*($1-1),
+                CURRENT_DATE - INTERVAL '1 day' * ($1-1),
                 CURRENT_DATE,
                 INTERVAL '1 day'
             ) AS gs(tanggal)
-            LEFT JOIN bookings b
-            ON b.tanggal=gs.tanggal::date
+            LEFT JOIN bookings b ON b.tanggal = gs.tanggal::date
             GROUP BY gs.tanggal
             ORDER BY gs.tanggal
-        `,[days]);
+        `, [days]);
 
         res.json(result.rows);
-
-    }catch(err){
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
 // KONFIRMASI PEMBAYARAN
 // ======================================================
-app.post("/api/konfirmasi-bayar",requireAdmin,async(req,res)=>{
-
-    try{
-
-        const { booking_id }=req.body;
+app.post("/api/konfirmasi-bayar", requireAdmin, async (req, res) => {
+    try {
+        const { booking_id } = req.body;
 
         await db.query(
-            `
-            UPDATE bookings
-            SET status_bayar='lunas'
-            WHERE id=$1
-            `,
+            "UPDATE bookings SET status_bayar='lunas' WHERE id=$1",
             [booking_id]
         );
 
-        log(`💰 BOOKING ${booking_id} LUNAS`);
+        log(`💰 LUNAS -> Booking #${booking_id}`);
+        res.json({ success: true, message: "Pembayaran dikonfirmasi!" });
 
-        res.json({
-            success:true
-        });
-
-    }catch(err){
-
-        res.status(500).json({
-            error:err.message
-        });
-
+    } catch (err) {
+        log("❌ Konfirmasi Bayar : " + err);
+        res.status(500).json({ error: err.message });
     }
-
 });
 
 // ======================================================
 // START SERVER
 // ======================================================
-app.listen(PORT,()=>{
-
-    log(`🚀 SERVER RUNNING`);
-
+app.listen(PORT, () => {
+    log("🚀 SERVER RUNNING");
     log(`🌐 http://localhost:${PORT}`);
-
+    log(`⏱ Sensor timeout: ${SHAKE_TIMEOUT_MS/1000} detik`);
 });
