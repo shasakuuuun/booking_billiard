@@ -224,6 +224,26 @@ app.post("/api/booking", async (req, res) => {
         // Total harga
         const totalHarga = durasi * 30000;
 
+        // FIX: Validasi bentrok jadwal di server (jangan cuma andalkan cek di client)
+        // Bentrok kalau ada booking lain (bukan completed) di meja yang sama & tanggal
+        // yang sama, dengan rentang waktu yang overlap.
+        const conflict = await db.query(`
+            SELECT id, nama, jam_mulai, jam_selesai FROM bookings
+            WHERE meja_id = $1
+              AND tanggal = CURRENT_DATE
+              AND status != 'completed'
+              AND jam_mulai < $2
+              AND jam_selesai > $3
+            LIMIT 1
+        `, [meja_id, jam_selesai, jam_mulai]);
+
+        if (conflict.rows.length) {
+            const c = conflict.rows[0];
+            return res.status(409).json({
+                error: `Meja sudah dibooking oleh ${c.nama} pukul ${c.jam_mulai}-${c.jam_selesai}`
+            });
+        }
+
         // Insert booking
         const insert = await db.query(`
             INSERT INTO bookings
