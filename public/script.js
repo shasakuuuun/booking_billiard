@@ -98,13 +98,17 @@ function displaySchedule() {
     const now = new Date().toTimeString().slice(0, 5);
 
     scheduleList.innerHTML = bookings.map((booking) => {
+        // Jam dari database berformat "HH:MM:SS", potong ke "HH:MM" agar adil dibandingkan dengan "now"
+        const mulai   = String(booking.jam_mulai).slice(0, 5);
+        const selesai = String(booking.jam_selesai).slice(0, 5);
+
         const isActive =
             booking.status === "active" ||
-            (booking.jam_mulai <= now && booking.jam_selesai > now);
+            (mulai <= now && selesai > now);
 
         const isCompleted =
             booking.status === "completed" ||
-            booking.jam_selesai <= now;
+            selesai <= now;
 
         const status = isCompleted
             ? { class: "status-completed", text: "✅ Selesai" }
@@ -407,13 +411,22 @@ function showStruk(data) {
                 </div>
             </div>
             <div class="struk-actions">
-                <button onclick="simpanPDF('${data.kode_aktivasi}', ${totalHarga}, '${data.nama}', '${data.meja_id}', '${tanggal}', '${formatTime(data.jam_mulai)}', '${formatTime(data.jam_selesai)}', ${data.durasi})" class="btn-print">💾 Simpan PDF</button>
+                <button id="btnSimpanPDF" class="btn-print">💾 Simpan PDF</button>
                 <button onclick="tutupStruk()" class="btn-tutup">✕ Tutup</button>
             </div>
         </div>
     `;
 
     document.body.appendChild(modal);
+
+    // Data dikirim lewat closure, bukan ditempel ke atribut HTML (anti injeksi)
+    const btnPdf = modal.querySelector("#btnSimpanPDF");
+    if (btnPdf) {
+        btnPdf.addEventListener("click", () => simpanPDF(
+            data.kode_aktivasi, totalHarga, data.nama, data.meja_id, tanggal,
+            formatTime(data.jam_mulai), formatTime(data.jam_selesai), data.durasi
+        ));
+    }
 }
 
 function tutupStruk() {
@@ -569,8 +582,8 @@ async function aktivasiKode() {
 
     if (!kode) { showAlert("❌ Masukkan kode aktivasi dulu!", "error"); return; }
 
-    const formatValid = /^BIL-\d{3}-\d{4}$/.test(kode);
-    if (!formatValid) { showAlert("❌ Format kode salah. Contoh: BIL-001-2025", "error"); return; }
+    const formatValid = /^BIL-[A-HJ-NP-Z2-9]{8}$/.test(kode);
+    if (!formatValid) { showAlert("❌ Format kode salah. Contoh: BIL-K7M29QXA", "error"); return; }
 
     try {
         showAlert("⏳ Mengaktifkan lampu...", "info");

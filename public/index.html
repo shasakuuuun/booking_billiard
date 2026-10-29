@@ -229,7 +229,7 @@
                 <input
                     type="text"
                     id="inputKodeAktivasi"
-                    placeholder="Contoh: BIL-001-2025"
+                    placeholder="Contoh: BIL-K7M29QXA"
                     maxlength="12"
                     oninput="this.value = this.value.toUpperCase()"
                     onkeydown="if(event.key === 'Enter') aktivasiKode()"
@@ -268,10 +268,12 @@
                 const id = Number(b.meja_id);
                 if (!mejaStatus[id]) return;
 
-                const isMain = b.jam_mulai <= now && b.jam_selesai > now;
+                const mulai   = String(b.jam_mulai).slice(0, 5);
+                const selesai = String(b.jam_selesai).slice(0, 5);
+                const isMain = mulai <= now && selesai > now;
                 if (isMain) {
                     mejaStatus[id] = { status: "main", nama: b.nama };
-                } else if (b.jam_mulai > now) {
+                } else if (mulai > now) {
                     // Hanya set tunggu kalau belum ada yang main
                     if (mejaStatus[id].status !== "main") {
                         mejaStatus[id] = { status: "tunggu", nama: b.nama };
@@ -303,7 +305,7 @@
                         <div class="meja-icon">${iconMap[info.status]}</div>
                         <div class="meja-name">Meja ${id}</div>
                         <span class="meja-status">${labelMap[info.status]}</span>
-                        ${info.nama ? `<div class="meja-booking-nama">👤 ${info.nama}</div>` : ''}
+                        ${info.nama ? `<div class="meja-booking-nama">👤 ${escapeHtml(info.nama)}</div>` : ''}
                     </div>
                 `;
             }).join("");

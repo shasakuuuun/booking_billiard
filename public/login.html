@@ -256,9 +256,15 @@
                     body: JSON.stringify({ token })
                 });
 
-                if (response.ok) {
+                const data = await response.json();
+
+                if (response.ok && data.valid) {
                     // Already logged in, redirect to admin
                     window.location.href = 'admin.html';
+                } else {
+                    // Token sudah tidak berlaku (kadaluarsa / logout) -> bersihkan
+                    localStorage.removeItem('adminToken');
+                    localStorage.removeItem('adminUsername');
                 }
             } catch (error) {
                 console.error('Token verification error:', error);

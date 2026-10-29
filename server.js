@@ -2,6 +2,7 @@ const express = require("express");
 const { Pool } = require("pg");
 const cors    = require("cors");
 const cron    = require("node-cron");
+const crypto  = require("crypto");
 require("dotenv").config();
 
 const app  = express();
@@ -14,11 +15,34 @@ function log(message) {
     console.log(`[${new Date().toISOString()}] ${message}`);
 }
 
+// PostgreSQL mengembalikan kolom TIME sebagai "HH:MM:SS" (mis. "14:03:00"),
+// sedangkan jam sekarang berformat "HH:MM". Kalau dibandingkan langsung sebagai
+// string, "14:03" < "14:03:00" → hasilnya meleset 1 menit. Selalu potong ke "HH:MM".
+function hhmm(t) {
+    return String(t).slice(0, 5);
+}
+
 // ======================================================
 // MIDDLEWARE
 // ======================================================
-app.use(cors());
-app.use(express.json());
+app.disable("x-powered-by");
+
+// Header keamanan dasar
+app.use((req, res, next) => {
+    res.set({
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options":        "DENY",
+        "Referrer-Policy":        "same-origin"
+    });
+    next();
+});
+
+// CORS: frontend disajikan dari server yang sama, jadi default-nya DITUTUP.
+// Kalau memang perlu, isi CORS_ORIGIN di .env (contoh: http://localhost:5500)
+app.use(cors({ origin: process.env.CORS_ORIGIN || false }));
+
+// Batasi ukuran body supaya tidak bisa dipakai membanjiri server
+app.use(express.json({ limit: "10kb" }));
 app.use(express.static("public"));
 
 process.on("uncaughtException",  err => log("❌ Uncaught    : " + err));
@@ -32,20 +56,97 @@ const ADMIN = {
     password: process.env.ADMIN_PASSWORD || "billiard123"
 };
 
+// Kredensial default hanya boleh dipakai untuk demo lokal
+if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
+    if (process.env.NODE_ENV === "production") {
+        console.error("❌ ADMIN_USERNAME dan ADMIN_PASSWORD wajib diisi di .env pada mode production");
+        process.exit(1);
+    }
+    log("⚠️  ADMIN_USERNAME/ADMIN_PASSWORD belum diisi di .env → memakai kredensial DEFAULT (hanya untuk demo!)");
+}
+
+// Perbandingan string yang tahan timing attack
+function safeEqual(a, b) {
+    const ha = crypto.createHash("sha256").update(String(a)).digest();
+    const hb = crypto.createHash("sha256").update(String(b)).digest();
+    return crypto.timingSafeEqual(ha, hb);
+}
+
+// Masa berlaku sesi admin (jam)
+const SESSION_HOURS = 12;
+
+// Durasi maksimal per booking (sesuai pilihan di form: 1-5 jam)
+const MAX_DURASI_JAM = 5;
+
+// Kunci rahasia ESP32 (opsional). Kalau diisi, /api/shake dan /api/esp-command
+// hanya bisa diakses perangkat yang mengirim header "x-esp-key" yang sama.
+const ESP_API_KEY = process.env.ESP_API_KEY || "";
+if (!ESP_API_KEY) {
+    log("⚠️  ESP_API_KEY belum diisi → endpoint ESP32 terbuka untuk siapa saja di jaringan");
+}
+
+function requireEsp(req, res, next) {
+    if (!ESP_API_KEY) return next();
+    const key = req.headers["x-esp-key"];
+    if (typeof key === "string" && safeEqual(key, ESP_API_KEY)) return next();
+    return res.status(401).json({ error: "Unauthorized" });
+}
+
+// ======================================================
+// RATE LIMITER SEDERHANA (tanpa library tambahan)
+// ======================================================
+function rateLimit({ windowMs, max, message }) {
+    const hits = new Map();
+    setInterval(() => {
+        const now = Date.now();
+        for (const [k, v] of hits) if (v.reset <= now) hits.delete(k);
+    }, windowMs).unref();
+
+    return (req, res, next) => {
+        const now = Date.now();
+        let e = hits.get(req.ip);
+        if (!e || e.reset <= now) {
+            e = { count: 0, reset: now + windowMs };
+            hits.set(req.ip, e);
+        }
+        e.count++;
+        if (e.count > max) {
+            res.set("Retry-After", String(Math.ceil((e.reset - now) / 1000)));
+            return res.status(429).json({ error: message });
+        }
+        next();
+    };
+}
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, max: 10,
+    message: "Terlalu banyak percobaan login. Coba lagi 15 menit lagi."
+});
+const aktivasiLimiter = rateLimit({
+    windowMs: 60 * 1000, max: 10,
+    message: "Terlalu banyak percobaan aktivasi. Coba lagi sebentar."
+});
+const bookingLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000, max: 20,
+    message: "Terlalu banyak booking dalam waktu singkat. Coba lagi nanti."
+});
+
 // ======================================================
 // GENERATE TOKEN
 // ======================================================
 function makeToken() {
-    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+    return crypto.randomBytes(32).toString("hex");   // 64 karakter, tidak bisa ditebak
 }
 
 // ======================================================
-// GENERATE KODE AKTIVASI — Format: BIL-001-2025
+// GENERATE KODE AKTIVASI — Format: BIL-XXXXXXXX (acak, 12 karakter)
+// Huruf/angka yang mirip (I, O, 0, 1) sengaja tidak dipakai
 // ======================================================
-function makeKodeAktivasi(bookingId) {
-    const pad  = String(bookingId).padStart(3, "0");
-    const year = new Date().getFullYear();
-    return `BIL-${pad}-${year}`;
+const KODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function makeKodeAktivasi() {
+    let s = "";
+    for (let i = 0; i < 8; i++) s += KODE_CHARS[crypto.randomInt(KODE_CHARS.length)];
+    return `BIL-${s}`;
 }
 
 // ======================================================
@@ -75,6 +176,10 @@ db.connect()
         `);
         log("✅ Tabel admin_sessions siap");
 
+        // Bersihkan sesi admin yang sudah kadaluarsa
+        await cleanupSessions();
+        setInterval(cleanupSessions, 60 * 60 * 1000).unref();
+
         // Auto-migrate kolom status_bayar & total_harga
         await db.query(`
             ALTER TABLE bookings
@@ -91,16 +196,35 @@ db.connect()
     });
 
 // ======================================================
-// AUTH MIDDLEWARE — Token dicek ke database
+// AUTH MIDDLEWARE — Token dicek ke database (+ masa berlaku)
 // ======================================================
+function getToken(req) {
+    const raw = req.headers["authorization"];
+    if (typeof raw !== "string") return "";
+    return raw.replace(/^Bearer\s+/i, "").trim();
+}
+
+async function cleanupSessions() {
+    try {
+        await db.query(
+            "DELETE FROM admin_sessions WHERE created_at < NOW() - ($1 * INTERVAL '1 hour')",
+            [SESSION_HOURS]
+        );
+    } catch (err) {
+        log("❌ cleanupSessions : " + err);
+    }
+}
+
 async function requireAdmin(req, res, next) {
-    const token = req.headers["authorization"] || req.headers["Authorization"];
+    const token = getToken(req);
     if (!token) return res.status(401).json({ error: "Unauthorized" });
 
     try {
         const result = await db.query(
-            "SELECT id FROM admin_sessions WHERE token=$1 LIMIT 1",
-            [token]
+            `SELECT id FROM admin_sessions
+             WHERE token=$1 AND created_at > NOW() - ($2 * INTERVAL '1 hour')
+             LIMIT 1`,
+            [token, SESSION_HOURS]
         );
         if (!result.rows.length) return res.status(401).json({ error: "Unauthorized" });
         next();
@@ -143,11 +267,20 @@ const SHAKE_TIMEOUT_MS = 25 * 1000;
 // ======================================================
 // ADMIN LOGIN
 // ======================================================
-app.post("/api/admin/login", async (req, res) => {
+app.post("/api/admin/login", loginLimiter, async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password } = req.body || {};
 
-        if (username !== ADMIN.username || password !== ADMIN.password) {
+        if (typeof username !== "string" || typeof password !== "string" ||
+            username.length > 100 || password.length > 200) {
+            return res.status(400).json({ error: "Username dan password harus diisi." });
+        }
+
+        // Dua-duanya selalu dibandingkan (tidak berhenti di yang pertama salah)
+        const userOk = safeEqual(username, ADMIN.username);
+        const passOk = safeEqual(password, ADMIN.password);
+
+        if (!userOk || !passOk) {
             log("❌ ADMIN LOGIN FAILED");
             return res.status(401).json({ error: "Username atau Password salah" });
         }
@@ -173,10 +306,14 @@ app.post("/api/admin/login", async (req, res) => {
 // ======================================================
 app.post("/api/admin/verify", async (req, res) => {
     try {
-        const { token } = req.body;
+        const { token } = req.body || {};
+        if (typeof token !== "string" || !token) return res.json({ valid: false });
+
         const result = await db.query(
-            "SELECT id FROM admin_sessions WHERE token=$1 LIMIT 1",
-            [token]
+            `SELECT id FROM admin_sessions
+             WHERE token=$1 AND created_at > NOW() - ($2 * INTERVAL '1 hour')
+             LIMIT 1`,
+            [token, SESSION_HOURS]
         );
         return res.json({ valid: result.rows.length > 0 });
     } catch (err) {
@@ -186,9 +323,40 @@ app.post("/api/admin/verify", async (req, res) => {
 });
 
 // ======================================================
+// LOGOUT — hapus sesi dari database (bukan cuma dari browser)
+// ======================================================
+app.post("/api/admin/logout", requireAdmin, async (req, res) => {
+    try {
+        await db.query("DELETE FROM admin_sessions WHERE token=$1", [getToken(req)]);
+        log("🚪 ADMIN LOGOUT");
+        return res.json({ success: true });
+    } catch (err) {
+        log("❌ Logout Error : " + err);
+        return res.status(500).json({ error: "Terjadi kesalahan pada server." });
+    }
+});
+
+// ======================================================
 // GET BOOKINGS HARI INI
 // ======================================================
+// Versi PUBLIK: tanpa kode_aktivasi, harga, dan status bayar
 app.get("/api/bookings", async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT id, nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi, status
+            FROM bookings
+            WHERE tanggal = CURRENT_DATE
+            ORDER BY jam_mulai ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        log("❌ Load Booking : " + err);
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
+    }
+});
+
+// Versi ADMIN: data lengkap (butuh login)
+app.get("/api/admin/bookings", requireAdmin, async (req, res) => {
     try {
         const result = await db.query(`
             SELECT * FROM bookings
@@ -197,23 +365,41 @@ app.get("/api/bookings", async (req, res) => {
         `);
         res.json(result.rows);
     } catch (err) {
-        log("❌ Load Booking : " + err);
-        res.status(500).json({ error: err.message });
+        log("❌ Load Booking Admin : " + err);
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
 // ======================================================
 // TAMBAH BOOKING
 // ======================================================
-app.post("/api/booking", async (req, res) => {
+app.post("/api/booking", bookingLimiter, async (req, res) => {
+    let client;
     try {
-        const { nama, jam_mulai, durasi, meja_id } = req.body;
+        const body = req.body || {};
 
-        if (!nama || !jam_mulai || !durasi || !meja_id) {
+        // ---------- VALIDASI INPUT ----------
+        const nama = typeof body.nama === "string"
+            ? body.nama.replace(/[\u0000-\u001F\u007F]/g, "").replace(/\s+/g, " ").trim()
+            : "";
+        const jam_mulai = typeof body.jam_mulai === "string" ? body.jam_mulai.trim() : "";
+        const durasi    = Number(body.durasi);
+        const meja_id   = Number(body.meja_id);
+
+        if (!nama || !jam_mulai || !body.durasi || !body.meja_id) {
             return res.status(400).json({ error: "Semua field wajib diisi." });
         }
-        if (durasi <= 0) {
-            return res.status(400).json({ error: "Durasi tidak valid." });
+        if (nama.length < 2 || nama.length > 100) {
+            return res.status(400).json({ error: "Nama harus 2-100 karakter." });
+        }
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(jam_mulai)) {
+            return res.status(400).json({ error: "Format jam mulai tidak valid (HH:MM)." });
+        }
+        if (!Number.isInteger(durasi) || durasi < 1 || durasi > MAX_DURASI_JAM) {
+            return res.status(400).json({ error: `Durasi harus 1-${MAX_DURASI_JAM} jam.` });
+        }
+        if (!Number.isInteger(meja_id) || meja_id < 1) {
+            return res.status(400).json({ error: "Meja tidak valid." });
         }
 
         // Hitung jam selesai
@@ -224,10 +410,22 @@ app.post("/api/booking", async (req, res) => {
         // Total harga
         const totalHarga = durasi * 30000;
 
-        // FIX: Validasi bentrok jadwal di server (jangan cuma andalkan cek di client)
-        // Bentrok kalau ada booking lain (bukan completed) di meja yang sama & tanggal
-        // yang sama, dengan rentang waktu yang overlap.
-        const conflict = await db.query(`
+        // ---------- TRANSAKSI (anti double-booking) ----------
+        client = await db.connect();
+        await client.query("BEGIN");
+
+        // Kunci per-meja: dua request bersamaan untuk meja yang sama dibuat antre,
+        // jadi pengecekan bentrok di bawah tidak bisa "kebalap".
+        await client.query("SELECT pg_advisory_xact_lock(1001, $1)", [meja_id]);
+
+        const mejaAda = await client.query("SELECT id FROM meja_billiard WHERE id=$1", [meja_id]);
+        if (!mejaAda.rows.length) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ error: "Meja tidak ditemukan." });
+        }
+
+        // Validasi bentrok jadwal di server (jangan cuma andalkan cek di client)
+        const conflict = await client.query(`
             SELECT id, nama, jam_mulai, jam_selesai FROM bookings
             WHERE meja_id = $1
               AND tanggal = CURRENT_DATE
@@ -238,30 +436,34 @@ app.post("/api/booking", async (req, res) => {
         `, [meja_id, jam_selesai, jam_mulai]);
 
         if (conflict.rows.length) {
+            await client.query("ROLLBACK");
             const c = conflict.rows[0];
             return res.status(409).json({
-                error: `Meja sudah dibooking oleh ${c.nama} pukul ${c.jam_mulai}-${c.jam_selesai}`
+                error: `Meja sudah dibooking pukul ${String(c.jam_mulai).slice(0, 5)}-${String(c.jam_selesai).slice(0, 5)}`
             });
         }
 
-        // Insert booking
-        const insert = await db.query(`
+        // Kode aktivasi acak (pastikan unik)
+        let kodeAktivasi = makeKodeAktivasi();
+        for (let i = 0; i < 5; i++) {
+            const dup = await client.query("SELECT 1 FROM bookings WHERE kode_aktivasi=$1", [kodeAktivasi]);
+            if (!dup.rows.length) break;
+            kodeAktivasi = makeKodeAktivasi();
+        }
+
+        const insert = await client.query(`
             INSERT INTO bookings
-                (nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi, status_bayar, total_harga)
+                (nama, meja_id, jam_mulai, jam_selesai, tanggal, durasi, status_bayar, total_harga, kode_aktivasi)
             VALUES
-                ($1, $2, $3, $4, CURRENT_DATE, $5, 'belum', $6)
+                ($1, $2, $3, $4, CURRENT_DATE, $5, 'belum', $6, $7)
             RETURNING id
-        `, [nama, meja_id, jam_mulai, jam_selesai, durasi, totalHarga]);
+        `, [nama, meja_id, jam_mulai, jam_selesai, durasi, totalHarga, kodeAktivasi]);
 
-        const bookingId    = insert.rows[0].id;
-        const kodeAktivasi = makeKodeAktivasi(bookingId);
+        await client.query("COMMIT");
 
-        await db.query(
-            "UPDATE bookings SET kode_aktivasi=$1 WHERE id=$2",
-            [kodeAktivasi, bookingId]
-        );
+        const bookingId = insert.rows[0].id;
 
-        // FIX: Reset sensor timeout untuk meja ini saat ada booking baru
+        // Reset sensor timeout untuk meja ini saat ada booking baru
         sensorTimeout[meja_id] = false;
 
         log(`📅 BOOKING -> Meja ${meja_id} | ${jam_mulai}-${jam_selesai} | Kode: ${kodeAktivasi}`);
@@ -279,20 +481,26 @@ app.post("/api/booking", async (req, res) => {
         });
 
     } catch (err) {
+        if (client) { try { await client.query("ROLLBACK"); } catch (_) {} }
         log("❌ Booking Error : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
+    } finally {
+        if (client) client.release();
     }
 });
 
 // ======================================================
 // AKTIVASI KODE (Customer Telat)
 // ======================================================
-app.post("/api/aktivasi", async (req, res) => {
+app.post("/api/aktivasi", aktivasiLimiter, async (req, res) => {
     try {
-        const { kode } = req.body;
+        const { kode } = req.body || {};
 
-        if (!kode) {
+        if (!kode || typeof kode !== "string") {
             return res.status(400).json({ error: "Kode aktivasi tidak boleh kosong." });
+        }
+        if (!/^BIL-[A-HJ-NP-Z2-9]{8}$/.test(kode.trim().toUpperCase())) {
+            return res.status(400).json({ error: "Format kode salah." });
         }
 
         const result = await db.query(`
@@ -310,8 +518,8 @@ app.post("/api/aktivasi", async (req, res) => {
         const booking = result.rows[0];
         const now     = new Date().toTimeString().slice(0, 5);
 
-        if (now < booking.jam_mulai) {
-            return res.status(400).json({ error: `Booking dimulai pukul ${booking.jam_mulai}` });
+        if (now < hhmm(booking.jam_mulai)) {
+            return res.status(400).json({ error: `Booking dimulai pukul ${hhmm(booking.jam_mulai)}` });
         }
 
         // FIX: Reset sensorTimeout dan manualMode saat aktivasi kode
@@ -344,7 +552,7 @@ app.post("/api/aktivasi", async (req, res) => {
 
     } catch (err) {
         log("❌ Aktivasi Error : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
@@ -357,7 +565,7 @@ app.get("/api/lampu/status", async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         log("❌ Status Lampu : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
@@ -383,7 +591,7 @@ app.get("/api/status-meja", async (req, res) => {
         res.json(result.rows);
     } catch (err) {
         log("❌ Status Meja : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
@@ -411,7 +619,7 @@ app.post("/api/reset-meja", requireAdmin, async (req, res) => {
 
     } catch (err) {
         log("❌ Reset Error : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
@@ -441,7 +649,7 @@ app.post("/api/lampu/control", requireAdmin, async (req, res) => {
 
     } catch (err) {
         log("❌ Global Error : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
@@ -450,7 +658,7 @@ app.post("/api/lampu/control", requireAdmin, async (req, res) => {
 // reset_only=true  → hanya reset timer, lampu tidak berubah
 // reset_only=false → reset timer + nyalain lampu
 // ======================================================
-app.post("/api/shake", async (req, res) => {
+app.post("/api/shake", requireEsp, async (req, res) => {
     try {
         const { meja_id, reset_only } = req.body;
 
@@ -485,7 +693,7 @@ app.post("/api/shake", async (req, res) => {
 
     } catch (err) {
         log("❌ Shake Error : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
@@ -519,14 +727,14 @@ app.post("/api/manual-control", requireAdmin, async (req, res) => {
 
     } catch (err) {
         log("❌ Manual Error : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
 // ======================================================
 // ESP32 COMMAND FETCHER
 // ======================================================
-app.get("/api/esp-command", (req, res) => {
+app.get("/api/esp-command", requireEsp, (req, res) => {
     try {
         const meja = parseInt(req.query.meja || "0");
         const cmd  = commandQueue[meja] || "";
@@ -574,9 +782,11 @@ cron.schedule("* * * * * *", async () => {
             let activeId = null;
 
             for (const b of booking.rows) {
-                const active = b.jam_mulai < b.jam_selesai
-                    ? (t >= b.jam_mulai && t < b.jam_selesai)
-                    : (t >= b.jam_mulai || t < b.jam_selesai);
+                const mulai   = hhmm(b.jam_mulai);
+                const selesai = hhmm(b.jam_selesai);
+                const active = mulai < selesai
+                    ? (t >= mulai && t < selesai)
+                    : (t >= mulai || t < selesai);
 
                 if (active) {
                     aktif    = true;
@@ -709,7 +919,7 @@ cron.schedule("* * * * * *", async () => {
 // ======================================================
 app.get("/api/statistik", async (req, res) => {
     try {
-        const days = parseInt(req.query.days || 30);
+        const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
 
         const result = await db.query(`
             SELECT
@@ -728,7 +938,8 @@ app.get("/api/statistik", async (req, res) => {
 
         res.json(result.rows);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        log("❌ Statistik : " + err);
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
 });
 
@@ -737,20 +948,41 @@ app.get("/api/statistik", async (req, res) => {
 // ======================================================
 app.post("/api/konfirmasi-bayar", requireAdmin, async (req, res) => {
     try {
-        const { booking_id } = req.body;
+        const booking_id = Number((req.body || {}).booking_id);
 
-        await db.query(
-            "UPDATE bookings SET status_bayar='lunas' WHERE id=$1",
+        if (!Number.isInteger(booking_id) || booking_id < 1) {
+            return res.status(400).json({ error: "Booking tidak valid." });
+        }
+
+        const upd = await db.query(
+            "UPDATE bookings SET status_bayar='lunas' WHERE id=$1 RETURNING id",
             [booking_id]
         );
+        if (!upd.rows.length) {
+            return res.status(404).json({ error: "Booking tidak ditemukan." });
+        }
 
         log(`💰 LUNAS -> Booking #${booking_id}`);
         res.json({ success: true, message: "Pembayaran dikonfirmasi!" });
 
     } catch (err) {
         log("❌ Konfirmasi Bayar : " + err);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
     }
+});
+
+// ======================================================
+// ERROR HANDLER GLOBAL (JSON rusak, body terlalu besar, dll)
+// ======================================================
+app.use((err, req, res, next) => {
+    if (err && err.type === "entity.parse.failed") {
+        return res.status(400).json({ error: "Format JSON tidak valid." });
+    }
+    if (err && err.type === "entity.too.large") {
+        return res.status(413).json({ error: "Data terlalu besar." });
+    }
+    log("❌ Middleware Error : " + err);
+    res.status(500).json({ error: "Terjadi kesalahan pada server." });
 });
 
 // ======================================================

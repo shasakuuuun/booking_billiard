@@ -10,6 +10,10 @@ const char* password = "";
 // Cek ulang dengan: buka CMD → ipconfig → lihat Ethernet 2
 String serverUrl = "";
 
+// Kunci rahasia ESP32 — harus SAMA dengan ESP_API_KEY di file .env server
+// (kosongkan kalau ESP_API_KEY di server tidak dipakai)
+const char* espKey = "";
+
 // ================== RELAY ==================
 #define RELAY1 18  // GPIO18 → Relay Channel 1 → Lampu Meja 1
 #define RELAY2 19  // GPIO19 → Relay Channel 2 → Lampu Meja 2
@@ -163,6 +167,7 @@ void sendResetTimer(int mejaId) {
     http.setConnectTimeout(3000);
     http.begin(url);
     http.addHeader("Content-Type", "application/json");
+    http.addHeader("x-esp-key", espKey);
 
     // reset_only: true → hanya reset timer, lampu tidak berubah
     String body = "{\"meja_id\":" + String(mejaId) + ",\"reset_only\":true}";
@@ -191,6 +196,7 @@ void checkCommandForMeja(int mejaID) {
 
     http.setConnectTimeout(3000);
     http.begin(url);
+    http.addHeader("x-esp-key", espKey);
     http.setTimeout(3000);
 
     int httpCode = http.GET();

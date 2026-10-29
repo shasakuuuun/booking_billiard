@@ -271,6 +271,28 @@ if (!adminToken) {
 }
 
 // ==================== HELPERS ====================
+// Escape teks dari database/pengguna sebelum dimasukkan ke innerHTML (anti XSS)
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[m]));
+}
+
+// fetch khusus admin: otomatis kirim token & tangani sesi habis (401)
+async function adminFetch(path, opts = {}) {
+  const r = await fetch(API + path, {
+    ...opts,
+    headers: { ...(opts.headers || {}), "Authorization": adminToken }
+  });
+  if (r.status === 401) {
+    localStorage.removeItem("adminToken");
+    alert("Sesi admin berakhir, silakan login ulang");
+    location.href = "login.html";
+    throw new Error("unauthorized");
+  }
+  return r;
+}
+
 function formatRp(angka) {
   return "Rp " + Number(angka || 0).toLocaleString("id-ID");
 }
@@ -323,7 +345,8 @@ document.querySelectorAll(".nav-item").forEach(n => {
 });
 
 // ==================== LOGOUT ====================
-document.getElementById("logoutBtn").onclick = () => {
+document.getElementById("logoutBtn").onclick = async () => {
+  try { await fetch(API + "/api/admin/logout", { method: "POST", headers: { "Authorization": adminToken } }); } catch {}
   localStorage.removeItem("adminToken");
   toast("Logout berhasil", "success");
   setTimeout(() => location.href = "login.html", 800);
@@ -341,7 +364,7 @@ loadAll();
 // ==================== STAT CARDS ====================
 async function loadStatCards() {
   try {
-    const r    = await fetch(API + "/api/bookings");
+    const r    = await adminFetch("/api/admin/bookings");
     const data = await r.json();
 
     const aktif      = data.filter(b => b.status === "active").length;
@@ -361,7 +384,7 @@ async function loadStatCards() {
 // ==================== BOOKINGS DASHBOARD ====================
 async function loadBookings() {
   try {
-    const r    = await fetch(API + "/api/bookings");
+    const r    = await adminFetch("/api/admin/bookings");
     const data = await r.json();
     const box  = document.getElementById("adminBookingList");
 
@@ -375,8 +398,8 @@ async function loadBookings() {
     box.innerHTML = data.map(b => `
       <div class="booking-item">
         <div class="booking-item-left">
-          <h4>👤 ${b.nama} &nbsp;•&nbsp; Meja ${b.meja_id}</h4>
-          <p>⏰ ${b.jam_mulai} - ${b.jam_selesai} &nbsp;|&nbsp; ⏱️ ${b.durasi} jam &nbsp;|&nbsp; 🔑 ${b.kode_aktivasi || '-'}</p>
+          <h4>👤 ${esc(b.nama)} &nbsp;•&nbsp; Meja ${esc(b.meja_id)}</h4>
+          <p>⏰ ${b.jam_mulai} - ${b.jam_selesai} &nbsp;|&nbsp; ⏱️ ${b.durasi} jam &nbsp;|&nbsp; 🔑 ${esc(b.kode_aktivasi) || '-'}</p>
           <p>💵 Total: <b>${formatRp(b.total_harga)}</b></p>
         </div>
         <div class="booking-item-right">
@@ -396,7 +419,7 @@ async function loadBookings() {
 // ==================== BOOKINGS TABLE ====================
 async function loadDetailedBookings() {
   try {
-    const r    = await fetch(API + "/api/bookings");
+    const r    = await adminFetch("/api/admin/bookings");
     const data = await r.json();
     const body = document.getElementById("detailedBookings");
 
@@ -410,13 +433,13 @@ async function loadDetailedBookings() {
     body.innerHTML = data.map((b, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td><b>${b.nama}</b></td>
-        <td>Meja ${b.meja_id}</td>
+        <td><b>${esc(b.nama)}</b></td>
+        <td>Meja ${esc(b.meja_id)}</td>
         <td>${b.jam_mulai}</td>
         <td>${b.jam_selesai}</td>
         <td>${b.durasi} jam</td>
         <td><b>${formatRp(b.total_harga)}</b></td>
-        <td><code style="background:#f1f5f9;padding:2px 8px;border-radius:6px;font-size:0.85em">${b.kode_aktivasi || '-'}</code></td>
+        <td><code style="background:#f1f5f9;padding:2px 8px;border-radius:6px;font-size:0.85em">${esc(b.kode_aktivasi) || '-'}</code></td>
         <td>${statusMap[b.status] || statusMap.pending}</td>
         <td>
           ${bayarMap[b.status_bayar] || bayarMap.belum}
@@ -434,9 +457,9 @@ async function loadDetailedBookings() {
 // ==================== KONFIRMASI BAYAR ====================
 async function konfirmasiBayar(bookingId) {
   try {
-    const r = await fetch(API + "/api/konfirmasi-bayar", {
+    const r = await adminFetch("/api/konfirmasi-bayar", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": adminToken },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ booking_id: bookingId })
     });
     const d = await r.json();
@@ -459,9 +482,9 @@ async function loadStatusMeja() {
     box.innerHTML = data.map(m => `
       <div class="meja-card ${m.status_lampu ? 'on' : 'off'}">
         <div class="lamp-icon">${m.status_lampu ? '💡' : '🌑'}</div>
-        <h4>${m.nama_meja}</h4>
+        <h4>${esc(m.nama_meja)}</h4>
         <p>Lampu: <b>${m.status_lampu ? 'ON' : 'OFF'}</b></p>
-        <p>Status: <b>${m.status_booking}</b></p>
+        <p>Status: <b>${esc(m.status_booking)}</b></p>
       </div>
     `).join("");
   } catch { toast("Gagal load status meja", "error"); }
@@ -565,9 +588,9 @@ function renderTable(data) {
 // ==================== MANUAL ====================
 async function manual(id, act) {
   try {
-    const r = await fetch(API + "/api/manual-control", {
+    const r = await adminFetch("/api/manual-control", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": adminToken },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ meja_id: id, action: act })
     });
     const d = await r.json();
@@ -581,9 +604,9 @@ async function manual(id, act) {
 async function globalControl(act) {
   if (!adminToken) return toast("Session expired", "error");
   try {
-    const r = await fetch(API + "/api/lampu/control", {
+    const r = await adminFetch("/api/lampu/control", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": adminToken },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: act })
     });
     const d = await r.json();
@@ -598,10 +621,7 @@ async function resetMeja() {
   if (!confirm("Reset semua meja? Semua booking akan ditandai selesai.")) return;
   if (!adminToken) return toast("Session expired, silakan login ulang", "error");
   try {
-    const r = await fetch(API + "/api/reset-meja", {
-      method: "POST",
-      headers: { "Authorization": adminToken }
-    });
+    const r = await adminFetch("/api/reset-meja", { method: "POST" });
     const d = await r.json();
     if (r.ok) toast("Reset berhasil!", "success");
     else toast("Gagal reset", "error");
