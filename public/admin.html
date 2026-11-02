@@ -180,6 +180,7 @@
       <button class="filter-btn active" onclick="setFilter(7, this)">7 Hari</button>
       <button class="filter-btn" onclick="setFilter(14, this)">14 Hari</button>
       <button class="filter-btn" onclick="setFilter(30, this)">30 Hari</button>
+      <button class="filter-btn" onclick="downloadIotLogs()">⬇️ Download Log IoT (7 Hari)</button>
     </div>
     <div class="card">
       <div class="card-header">
@@ -506,6 +507,22 @@ function setFilter(days, btn) {
   document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
   loadStatistik(days);
+}
+
+async function downloadIotLogs() {
+  try {
+    const to = new Date();
+    const from = new Date(Date.now() - 6 * 86400000);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const response = await adminFetch(`/api/admin/iot-export.csv?from=${fmt(from)}&to=${fmt(to)}`);
+    if (!response.ok) throw new Error("Export gagal");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `log-iot-${fmt(from)}-${fmt(to)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast("Log IoT berhasil diunduh", "success");
+  } catch (err) { console.error(err); toast("Gagal mengunduh log IoT", "error"); }
 }
 
 function renderChart(data) {

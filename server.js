@@ -77,6 +77,8 @@ const SESSION_HOURS = 12;
 
 // Durasi maksimal per booking (sesuai pilihan di form: 1-5 jam)
 const MAX_DURASI_JAM = 5;
+const JAM_BUKA = 9 * 60;   // 09:00 WIB
+const JAM_TUTUP = 23 * 60; // 23:00 WIB
 
 // Kunci rahasia ESP32 (opsional). Kalau diisi, /api/shake dan /api/esp-command
 // hanya bisa diakses perangkat yang mengirim header "x-esp-key" yang sama.
@@ -400,6 +402,19 @@ app.post("/api/booking", bookingLimiter, async (req, res) => {
         }
         if (!Number.isInteger(meja_id) || meja_id < 1) {
             return res.status(400).json({ error: "Meja tidak valid." });
+        }
+
+        // Jam operasional: 09:00-23:00 WIB. Booking wajib selesai
+        // paling lambat pukul 23:00.
+        const [jamMulaiHour, jamMulaiMinute] = jam_mulai.split(":").map(Number);
+        const menitMulai = jamMulaiHour * 60 + jamMulaiMinute;
+        const menitSelesai = menitMulai + durasi * 60;
+
+        if (menitMulai < JAM_BUKA) {
+            return res.status(400).json({ error: "Booking hanya dapat dimulai mulai pukul 09:00 WIB." });
+        }
+        if (menitSelesai > JAM_TUTUP) {
+            return res.status(400).json({ error: "Booking harus selesai paling lambat pukul 23:00 WIB. Kurangi durasi atau pilih jam mulai lebih awal." });
         }
 
         // Hitung jam selesai

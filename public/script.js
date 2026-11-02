@@ -1,4 +1,24 @@
 // ====== GLOBAL STATE ======
+
+// Batasi jam mulai agar sesi selesai maksimal pukul 23:00 WIB.
+function updateJamMulaiLimit() {
+    const jamInput = document.getElementById("jamMulai");
+    const durasiInput = document.getElementById("durasi");
+    if (!jamInput || !durasiInput) return;
+
+    const durasi = Number(durasiInput.value || 1);
+    const maxStartMinutes = 23 * 60 - durasi * 60;
+    const maxHour = String(Math.floor(maxStartMinutes / 60)).padStart(2, "0");
+    const maxMinute = String(maxStartMinutes % 60).padStart(2, "0");
+    jamInput.min = "09:00";
+    jamInput.max = `${maxHour}:${maxMinute}`;
+
+    if (jamInput.value && (jamInput.value < jamInput.min || jamInput.value > jamInput.max)) {
+        jamInput.value = "";
+    }
+}
+
+
 let bookings = [];
 let lampuStatus = false;
 
@@ -34,8 +54,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update harga otomatis saat durasi berubah
     const durasiSelect = document.getElementById("durasi");
     if (durasiSelect) {
-        durasiSelect.addEventListener("change", updateHargaPreview);
+        durasiSelect.addEventListener("change", () => {
+            updateHargaPreview();
+            updateJamMulaiLimit();
+        });
     }
+    updateJamMulaiLimit();
 
     // Refresh data tiap 30 detik
     setInterval(() => {
@@ -178,6 +202,20 @@ async function handleBookingSubmit(e) {
 
     if (bookingData.nama.length < 2) {
         showAlert("❌ Nama minimal 2 karakter!", "error");
+        return;
+    }
+
+    // Jam operasional 09:00-23:00 WIB; sesi harus selesai sebelum tutup.
+    const [mulaiJam, mulaiMenit] = bookingData.jam_mulai.split(":").map(Number);
+    const menitMulai = mulaiJam * 60 + mulaiMenit;
+    const menitSelesai = menitMulai + bookingData.durasi * 60;
+
+    if (menitMulai < 9 * 60) {
+        showAlert("❌ Booking hanya tersedia mulai pukul 09.00 WIB.", "error");
+        return;
+    }
+    if (menitSelesai > 23 * 60) {
+        showAlert("❌ Booking harus selesai paling lambat pukul 23.00 WIB. Silakan pilih jam mulai lebih awal atau durasi lebih pendek.", "error");
         return;
     }
 
