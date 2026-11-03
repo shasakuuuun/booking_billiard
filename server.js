@@ -15,6 +15,26 @@ function log(message) {
     console.log(`[${new Date().toISOString()}] ${message}`);
 }
 
+// Simpan log secara best-effort agar kegagalan pencatatan tidak mengganggu kontrol meja.
+async function saveIotLog(eventType, mejaId = null, action = "", details = "") {
+    try {
+        await db.query(
+            `INSERT INTO iot_logs (event_type, meja_id, action, details)
+             VALUES ($1, $2, $3, $4)`,
+            [String(eventType).slice(0, 40), mejaId == null ? null : Number(mejaId),
+             String(action || "").slice(0, 80), String(details || "").slice(0, 2000)]
+        );
+    } catch (err) {
+        log("❌ Simpan log IoT : " + err.message);
+    }
+}
+
+// Escape field CSV sesuai aturan RFC 4180.
+function csvCell(value) {
+    const s = value == null ? "" : String(value);
+    return '"' + s.replace(/"/g, '""') + '"';
+}
+
 // PostgreSQL mengembalikan kolom TIME sebagai "HH:MM:SS" (mis. "14:03:00"),
 // sedangkan jam sekarang berformat "HH:MM". Kalau dibandingkan langsung sebagai
 // string, "14:03" < "14:03:00" → hasilnya meleset 1 menit. Selalu potong ke "HH:MM".
@@ -177,6 +197,23 @@ db.connect()
             )
         `);
         log("✅ Tabel admin_sessions siap");
+
+        // Riwayat aktivitas IoT (sensor, lampu, dan perintah perangkat)
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS iot_logs (
+                id BIGSERIAL PRIMARY KEY,
+                event_type VARCHAR(40) NOT NULL,
+                meja_id INTEGER,
+                action VARCHAR(80),
+                details TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        `);
+        await db.query(`
+            CREATE INDEX IF NOT EXISTS idx_iot_logs_created_at
+            ON iot_logs (created_at DESC)
+        `);
+        log("✅ Tabel iot_logs siap");
 
         // Bersihkan sesi admin yang sudah kadaluarsa
         await cleanupSessions();
@@ -358,6 +395,53 @@ app.get("/api/bookings", async (req, res) => {
 });
 
 // Versi ADMIN: data lengkap (butuh login)
+// ======================================================
+// EXPORT LOG IoT (7 hari atau rentang tanggal pilihan)
+// ======================================================
+app.get("/api/admin/iot-export.csv", requireAdmin, async (req, res) => {
+    try {
+        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+        const from = typeof req.query.from === "string" ? req.query.from : "";
+        const to = typeof req.query.to === "string" ? req.query.to : "";
+        if (!datePattern.test(from) || !datePattern.test(to) ||
+            Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to)) || from > to) {
+            return res.status(400).json({ error: "Rentang tanggal tidak valid." });
+        }
+
+        const result = await db.query(
+            `SELECT id, event_type, meja_id, action, details, created_at
+             FROM iot_logs
+             WHERE created_at >= ($1::date)::timestamptz
+               AND created_at < (($2::date + INTERVAL '1 day')::timestamptz)
+             ORDER BY created_at ASC`,
+            [from, to]
+        );
+
+        const header = ["id", "event_type", "meja_id", "action", "details", "created_at"];
+        const lines = [header.map(csvCell).join(",")];
+        for (const row of result.rows) {
+            lines.push([
+                row.id, row.event_type, row.meja_id, row.action, row.details,
+                row.created_at ? new Date(row.created_at).toISOString() : ""
+            ].map(csvCell).join(","));
+        }
+        if (result.rows.length === 0) {
+            lines.push(csvCell("") + "," + csvCell("INFO") + ",,,"
+                + csvCell("Belum ada log IoT pada rentang tanggal ini.") + ",");
+        }
+
+        res.set({
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="log-iot-${from}-${to}.csv"`,
+            "Cache-Control": "no-store"
+        });
+        return res.send("\\uFEFF" + lines.join("\\r\\n"));
+    } catch (err) {
+        log("❌ Export Log IoT : " + err);
+        return res.status(500).json({ error: "Gagal mengekspor log IoT." });
+    }
+});
+
 app.get("/api/admin/bookings", requireAdmin, async (req, res) => {
     try {
         const result = await db.query(`
@@ -630,6 +714,7 @@ app.post("/api/reset-meja", requireAdmin, async (req, res) => {
         pushCommand("OFF2");
 
         log("♻ RESET SEMUA MEJA");
+        await saveIotLog("ADMIN", null, "RESET_ALL", "Reset seluruh meja dan lampu");
         res.json({ success: true, message: "Reset berhasil." });
 
     } catch (err) {
@@ -660,6 +745,7 @@ app.post("/api/lampu/control", requireAdmin, async (req, res) => {
         pushCommand(`${action}2`);
 
         log(`💡 GLOBAL ${action}`);
+        await saveIotLog("LAMP", null, action, "Kontrol lampu global oleh admin");
         res.json({ success: true, message: `Semua lampu ${action}` });
 
     } catch (err) {
@@ -689,6 +775,8 @@ app.post("/api/shake", requireEsp, async (req, res) => {
         sensorTimeout[meja_id] = false;
 
         log(`🔔 SENSOR -> Meja ${meja_id} | reset_only=${reset_only}`);
+        await saveIotLog("SENSOR", Number(meja_id), "SHAKE",
+            `reset_only=${Boolean(reset_only)}`);
 
         if (!reset_only) {
             // Mode lama: nyalain lampu + reset timer
@@ -699,6 +787,7 @@ app.post("/api/shake", requireEsp, async (req, res) => {
                 [meja_id]
             );
             log(`💡 Lampu ON -> Meja ${meja_id}`);
+            await saveIotLog("LAMP", Number(meja_id), "ON", "Aktivasi dari sensor getar");
         } else {
             // Mode baru: HANYA reset timer, lampu tidak berubah
             log(`⏱ Timer Reset -> Meja ${meja_id} (lampu tidak berubah)`);
@@ -738,6 +827,7 @@ app.post("/api/manual-control", requireAdmin, async (req, res) => {
         pushCommand(`${action}${meja_id}`);
 
         log(`💡 MANUAL ${action} -> Meja ${meja_id}`);
+        await saveIotLog("LAMP", Number(meja_id), action, "Kontrol manual oleh admin");
         res.json({ success: true, message: `Lampu meja ${meja_id} ${action}` });
 
     } catch (err) {
@@ -756,6 +846,7 @@ app.get("/api/esp-command", requireEsp, (req, res) => {
 
         if (cmd) {
             log(`📤 SEND -> ${cmd}`);
+            saveIotLog("DEVICE", meja, cmd, "Perintah dikirim ke ESP32");
             commandQueue[meja] = "";
             return res.send(cmd);
         }
