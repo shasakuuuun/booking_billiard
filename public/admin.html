@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -99,7 +100,7 @@
     .toast.error   { background: #ef4444; }
     .toast.info    { background: #3b82f6; }
 
-    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
     .filter-btn { padding: 7px 16px; border-radius: 20px; border: 2px solid #e2e8f0; background: #fff; cursor: pointer; font-size: 0.83em; font-weight: 600; color: #64748b; transition: 0.2s; }
     .filter-btn.active, .filter-btn:hover { border-color: #3b82f6; background: #dbeafe; color: #1e40af; }
 
@@ -113,7 +114,6 @@
 </head>
 <body>
 
-<!-- SIDEBAR -->
 <div class="sidebar">
   <div class="sidebar-logo">
     <div class="avatar-big">🎱</div>
@@ -129,10 +129,8 @@
   </nav>
 </div>
 
-<!-- MAIN -->
 <div class="main">
 
-  <!-- TOPBAR -->
   <div class="topbar">
     <h2 id="pageTitle">📊 Dashboard</h2>
     <div class="topbar-right">
@@ -141,7 +139,6 @@
     </div>
   </div>
 
-  <!-- ==================== DASHBOARD ==================== -->
   <div id="dashboard" class="section active">
     <div class="stat-grid">
       <div class="stat-card">
@@ -173,7 +170,6 @@
     </div>
   </div>
 
-  <!-- ==================== STATISTIK ==================== -->
   <div id="statistik" class="section">
     <div class="filter-bar">
       <span style="font-size:0.85em;color:#64748b;font-weight:600;">Tampilkan:</span>
@@ -181,7 +177,9 @@
       <button class="filter-btn" onclick="setFilter(14, this)">14 Hari</button>
       <button class="filter-btn" onclick="setFilter(30, this)">30 Hari</button>
       <button class="filter-btn" onclick="downloadIotLogs()">⬇️ Download Log IoT (7 Hari)</button>
+      <button class="filter-btn" onclick="downloadExcelReport()">📊 Download Laporan Excel (7 Hari)</button>
     </div>
+
     <div class="card">
       <div class="card-header">
         <h3>📊 Grafik Booking Harian</h3>
@@ -189,6 +187,7 @@
       </div>
       <div class="chart-wrap"><canvas id="bookingChart"></canvas></div>
     </div>
+
     <div class="card">
       <div class="card-header">
         <h3>📋 Detail Statistik Harian</h3>
@@ -210,20 +209,20 @@
     </div>
   </div>
 
-  <!-- ==================== LAMP CONTROL ==================== -->
   <div id="lamp" class="section">
     <div class="card">
       <div class="card-header"><h3>🎛️ Kontrol Manual Lampu</h3></div>
       <div class="control-grid">
-        <button class="btn btn-success"   onclick="manual(1,'ON')">💡 Meja 1 ON</button>
-        <button class="btn btn-danger"    onclick="manual(1,'OFF')">🌑 Meja 1 OFF</button>
-        <button class="btn btn-success"   onclick="manual(2,'ON')">💡 Meja 2 ON</button>
-        <button class="btn btn-danger"    onclick="manual(2,'OFF')">🌑 Meja 2 OFF</button>
-        <button class="btn btn-primary"   onclick="globalControl('ON')">⚡ Semua ON</button>
+        <button class="btn btn-success" onclick="manual(1,'ON')">💡 Meja 1 ON</button>
+        <button class="btn btn-danger" onclick="manual(1,'OFF')">🌑 Meja 1 OFF</button>
+        <button class="btn btn-success" onclick="manual(2,'ON')">💡 Meja 2 ON</button>
+        <button class="btn btn-danger" onclick="manual(2,'OFF')">🌑 Meja 2 OFF</button>
+        <button class="btn btn-primary" onclick="globalControl('ON')">⚡ Semua ON</button>
         <button class="btn btn-secondary" onclick="globalControl('OFF')">🌑 Semua OFF</button>
-        <button class="btn btn-reset"     onclick="resetMeja()">🔄 Reset Semua</button>
+        <button class="btn btn-reset" onclick="resetMeja()">🔄 Reset Semua</button>
       </div>
     </div>
+
     <div class="card">
       <div class="card-header"><h3>📡 Status Meja Real-time</h3></div>
       <div class="meja-grid" id="statusMeja">
@@ -232,7 +231,6 @@
     </div>
   </div>
 
-  <!-- ==================== BOOKINGS ==================== -->
   <div id="bookings" class="section">
     <div class="card">
       <div class="card-header">
@@ -262,8 +260,8 @@
 
 <script>
 const API = "";
-let adminToken    = localStorage.getItem("adminToken");
-let bookingChart  = null;
+let adminToken = localStorage.getItem("adminToken");
+let bookingChart = null;
 let currentFilter = 30;
 
 if (!adminToken) {
@@ -272,25 +270,25 @@ if (!adminToken) {
 }
 
 // ==================== HELPERS ====================
-// Escape teks dari database/pengguna sebelum dimasukkan ke innerHTML (anti XSS)
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, m => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[m]));
 }
 
-// fetch khusus admin: otomatis kirim token & tangani sesi habis (401)
 async function adminFetch(path, opts = {}) {
   const r = await fetch(API + path, {
     ...opts,
     headers: { ...(opts.headers || {}), "Authorization": adminToken }
   });
+
   if (r.status === 401) {
     localStorage.removeItem("adminToken");
     alert("Sesi admin berakhir, silakan login ulang");
     location.href = "login.html";
     throw new Error("unauthorized");
   }
+
   return r;
 }
 
@@ -298,10 +296,18 @@ function formatRp(angka) {
   return "Rp " + Number(angka || 0).toLocaleString("id-ID");
 }
 
+// Menghasilkan tanggal lokal YYYY-MM-DD
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 const statusMap = {
-  active:    `<span class="status-badge status-active">🟢 Aktif</span>`,
+  active: `<span class="status-badge status-active">🟢 Aktif</span>`,
   completed: `<span class="status-badge status-completed">✅ Selesai</span>`,
-  pending:   `<span class="status-badge status-pending">⏳ Menunggu</span>`,
+  pending: `<span class="status-badge status-pending">⏳ Menunggu</span>`,
 };
 
 const bayarMap = {
@@ -312,11 +318,15 @@ const bayarMap = {
 // ==================== CLOCK ====================
 setInterval(() => {
   document.getElementById("topTime").textContent =
-    new Date().toLocaleTimeString("id-ID", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+    new Date().toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
 }, 1000);
 
 // ==================== TOAST ====================
-function toast(msg, type="info", time=2500) {
+function toast(msg, type = "info", time = 2500) {
   const box = document.createElement("div");
   box.className = "toast " + type;
   box.textContent = msg;
@@ -328,26 +338,34 @@ function toast(msg, type="info", time=2500) {
 const pageTitles = {
   dashboard: "📊 Dashboard",
   statistik: "📈 Statistik Booking",
-  lamp:      "💡 Lamp Control",
-  bookings:  "📋 Bookings"
+  lamp: "💡 Lamp Control",
+  bookings: "📋 Bookings"
 };
 
 document.querySelectorAll(".nav-item").forEach(n => {
   n.onclick = () => {
     document.querySelectorAll(".nav-item").forEach(a => a.classList.remove("active"));
     document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+
     n.classList.add("active");
     document.getElementById(n.dataset.target).classList.add("active");
     document.getElementById("pageTitle").textContent = pageTitles[n.dataset.target] || "";
+
     if (n.dataset.target === "statistik") loadStatistik(currentFilter);
-    if (n.dataset.target === "lamp")      loadStatusMeja();
-    if (n.dataset.target === "bookings")  loadDetailedBookings();
+    if (n.dataset.target === "lamp") loadStatusMeja();
+    if (n.dataset.target === "bookings") loadDetailedBookings();
   };
 });
 
 // ==================== LOGOUT ====================
 document.getElementById("logoutBtn").onclick = async () => {
-  try { await fetch(API + "/api/admin/logout", { method: "POST", headers: { "Authorization": adminToken } }); } catch {}
+  try {
+    await fetch(API + "/api/admin/logout", {
+      method: "POST",
+      headers: { "Authorization": adminToken }
+    });
+  } catch {}
+
   localStorage.removeItem("adminToken");
   toast("Logout berhasil", "success");
   setTimeout(() => location.href = "login.html", 800);
@@ -359,35 +377,37 @@ async function loadAll() {
   await loadStatCards();
   loadStatusMeja();
 }
+
 setInterval(loadAll, 15000);
 loadAll();
 
 // ==================== STAT CARDS ====================
 async function loadStatCards() {
   try {
-    const r    = await adminFetch("/api/admin/bookings");
+    const r = await adminFetch("/api/admin/bookings");
     const data = await r.json();
 
-    const aktif      = data.filter(b => b.status === "active").length;
-    const totalJam   = data.reduce((s, b) => s + Number(b.durasi || 0), 0);
+    const aktif = data.filter(b => b.status === "active").length;
+    const totalJam = data.reduce((s, b) => s + Number(b.durasi || 0), 0);
     const pendapatan = data
       .filter(b => b.status_bayar === "lunas")
       .reduce((s, b) => s + Number(b.total_harga || 0), 0);
 
     document.getElementById("statBookingHariIni").textContent = data.length;
-    document.getElementById("statAktif").textContent          = aktif;
-    document.getElementById("statJam").textContent            = totalJam + " jam";
-    document.getElementById("statPendapatan").textContent     = formatRp(pendapatan);
-
-  } catch (e) { console.error("stat cards error:", e); }
+    document.getElementById("statAktif").textContent = aktif;
+    document.getElementById("statJam").textContent = totalJam + " jam";
+    document.getElementById("statPendapatan").textContent = formatRp(pendapatan);
+  } catch (e) {
+    console.error("stat cards error:", e);
+  }
 }
 
 // ==================== BOOKINGS DASHBOARD ====================
 async function loadBookings() {
   try {
-    const r    = await adminFetch("/api/admin/bookings");
+    const r = await adminFetch("/api/admin/bookings");
     const data = await r.json();
-    const box  = document.getElementById("adminBookingList");
+    const box = document.getElementById("adminBookingList");
 
     document.getElementById("badgeHariIni").textContent = data.length + " booking";
 
@@ -400,14 +420,14 @@ async function loadBookings() {
       <div class="booking-item">
         <div class="booking-item-left">
           <h4>👤 ${esc(b.nama)} &nbsp;•&nbsp; Meja ${esc(b.meja_id)}</h4>
-          <p>⏰ ${b.jam_mulai} - ${b.jam_selesai} &nbsp;|&nbsp; ⏱️ ${b.durasi} jam &nbsp;|&nbsp; 🔑 ${esc(b.kode_aktivasi) || '-'}</p>
+          <p>⏰ ${esc(b.jam_mulai)} - ${esc(b.jam_selesai)} &nbsp;|&nbsp; ⏱️ ${esc(b.durasi)} jam &nbsp;|&nbsp; 🔑 ${esc(b.kode_aktivasi) || '-'}</p>
           <p>💵 Total: <b>${formatRp(b.total_harga)}</b></p>
         </div>
         <div class="booking-item-right">
           ${statusMap[b.status] || statusMap.pending}
           ${bayarMap[b.status_bayar] || bayarMap.belum}
           ${b.status_bayar !== 'lunas' ? `
-            <button class="btn-lunas" onclick="konfirmasiBayar(${b.id})">✅ Tandai Lunas</button>
+            <button class="btn-lunas" onclick="konfirmasiBayar(${Number(b.id)})">✅ Tandai Lunas</button>
           ` : ''}
         </div>
       </div>
@@ -420,7 +440,7 @@ async function loadBookings() {
 // ==================== BOOKINGS TABLE ====================
 async function loadDetailedBookings() {
   try {
-    const r    = await adminFetch("/api/admin/bookings");
+    const r = await adminFetch("/api/admin/bookings");
     const data = await r.json();
     const body = document.getElementById("detailedBookings");
 
@@ -436,16 +456,16 @@ async function loadDetailedBookings() {
         <td>${i + 1}</td>
         <td><b>${esc(b.nama)}</b></td>
         <td>Meja ${esc(b.meja_id)}</td>
-        <td>${b.jam_mulai}</td>
-        <td>${b.jam_selesai}</td>
-        <td>${b.durasi} jam</td>
+        <td>${esc(b.jam_mulai)}</td>
+        <td>${esc(b.jam_selesai)}</td>
+        <td>${esc(b.durasi)} jam</td>
         <td><b>${formatRp(b.total_harga)}</b></td>
         <td><code style="background:#f1f5f9;padding:2px 8px;border-radius:6px;font-size:0.85em">${esc(b.kode_aktivasi) || '-'}</code></td>
         <td>${statusMap[b.status] || statusMap.pending}</td>
         <td>
           ${bayarMap[b.status_bayar] || bayarMap.belum}
           ${b.status_bayar !== 'lunas' ? `
-            <button class="btn-lunas" style="margin-top:4px;display:block" onclick="konfirmasiBayar(${b.id})">✅ Tandai Lunas</button>
+            <button class="btn-lunas" style="margin-top:4px;display:block" onclick="konfirmasiBayar(${Number(b.id)})">✅ Tandai Lunas</button>
           ` : ''}
         </td>
       </tr>
@@ -463,7 +483,9 @@ async function konfirmasiBayar(bookingId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ booking_id: bookingId })
     });
+
     const d = await r.json();
+
     if (r.ok) {
       toast("💰 Pembayaran dikonfirmasi!", "success");
       loadAll();
@@ -471,15 +493,18 @@ async function konfirmasiBayar(bookingId) {
     } else {
       toast("Gagal konfirmasi: " + d.error, "error");
     }
-  } catch { toast("Gagal konfirmasi", "error"); }
+  } catch {
+    toast("Gagal konfirmasi", "error");
+  }
 }
 
 // ==================== STATUS MEJA ====================
 async function loadStatusMeja() {
   try {
-    const r    = await fetch(API + "/api/status-meja");
+    const r = await fetch(API + "/api/status-meja");
     const data = await r.json();
-    const box  = document.getElementById("statusMeja");
+    const box = document.getElementById("statusMeja");
+
     box.innerHTML = data.map(m => `
       <div class="meja-card ${m.status_lampu ? 'on' : 'off'}">
         <div class="lamp-icon">${m.status_lampu ? '💡' : '🌑'}</div>
@@ -488,47 +513,131 @@ async function loadStatusMeja() {
         <p>Status: <b>${esc(m.status_booking)}</b></p>
       </div>
     `).join("");
-  } catch { toast("Gagal load status meja", "error"); }
+  } catch {
+    toast("Gagal load status meja", "error");
+  }
 }
 
 // ==================== STATISTIK ====================
 async function loadStatistik(days) {
   try {
     document.getElementById("badgeGrafik").textContent = `${days} hari terakhir`;
-    const r    = await fetch(API + `/api/statistik?days=${days}`);
+
+    const r = await fetch(API + `/api/statistik?days=${days}`);
+    if (!r.ok) throw new Error("Gagal mengambil statistik");
+
     const data = await r.json();
     renderChart(data);
     renderTable(data);
-  } catch { toast("Gagal load statistik", "error"); }
+  } catch (err) {
+    console.error(err);
+    toast("Gagal load statistik", "error");
+  }
 }
 
 function setFilter(days, btn) {
   currentFilter = days;
-  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".filter-bar .filter-btn").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
   loadStatistik(days);
 }
 
+// ==================== DOWNLOAD LOG IOT CSV ====================
 async function downloadIotLogs() {
   try {
     const to = new Date();
-    const from = new Date(Date.now() - 6 * 86400000);
-    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    const response = await adminFetch(`/api/admin/iot-export.csv?from=${fmt(from)}&to=${fmt(to)}`);
-    if (!response.ok) throw new Error("Export gagal");
+    const from = new Date();
+    from.setDate(from.getDate() - 6);
+
+    const fromText = formatLocalDate(from);
+    const toText = formatLocalDate(to);
+
+    const response = await adminFetch(
+      `/api/admin/iot-export.csv?from=${fromText}&to=${toText}`
+    );
+
+    if (!response.ok) {
+      throw new Error("Export gagal");
+    }
+
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `log-iot-${fmt(from)}-${fmt(to)}.csv`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+
+    a.href = url;
+    a.download = `log-iot-${fromText}-${toText}.csv`;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast("Log IoT berhasil diunduh", "success");
-  } catch (err) { console.error(err); toast("Gagal mengunduh log IoT", "error"); }
+  } catch (err) {
+    console.error(err);
+    toast("Gagal mengunduh log IoT", "error");
+  }
 }
 
+// ==================== DOWNLOAD LAPORAN EXCEL ====================
+async function downloadExcelReport() {
+  try {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 6);
+
+    const fromText = formatLocalDate(from);
+    const toText = formatLocalDate(to);
+
+    toast("Sedang menyiapkan laporan Excel...", "info", 4000);
+
+    const response = await adminFetch(
+      `/api/admin/laporan.xlsx?from=${fromText}&to=${toText}`
+    );
+
+    if (!response.ok) {
+      let message = "Gagal membuat laporan Excel";
+
+      try {
+        const errorData = await response.json();
+        if (errorData.error) message = errorData.error;
+      } catch {}
+
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = `laporan-billiard-${fromText}-${toText}.xlsx`;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast("Laporan Excel berhasil diunduh", "success");
+  } catch (err) {
+    console.error("Download Excel error:", err);
+    toast(err.message || "Gagal mengunduh laporan Excel", "error", 4000);
+  }
+}
+
+// ==================== RENDER CHART ====================
 function renderChart(data) {
-  const labels = data.map(d => new Date(d.tanggal).toLocaleDateString("id-ID", { day:"numeric", month:"short" }));
+  const labels = data.map(d => {
+    const tgl = String(d.tanggal).slice(0, 10);
+    const [year, month, day] = tgl.split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short"
+    });
+  });
+
   const values = data.map(d => Number(d.total_booking));
-  const ctx    = document.getElementById("bookingChart").getContext("2d");
+  const ctx = document.getElementById("bookingChart").getContext("2d");
 
   if (bookingChart) bookingChart.destroy();
 
@@ -539,49 +648,85 @@ function renderChart(data) {
       datasets: [{
         label: "Jumlah Booking",
         data: values,
-        backgroundColor: values.map(v => v === 0 ? "rgba(226,232,240,0.8)" : v >= 3 ? "rgba(59,130,246,0.85)" : "rgba(99,179,237,0.85)"),
-        borderColor:     values.map(v => v === 0 ? "#cbd5e0" : v >= 3 ? "#2563eb" : "#63b3ed"),
-        borderWidth: 2, borderRadius: 8, borderSkipped: false,
+        backgroundColor: values.map(v =>
+          v === 0 ? "rgba(226,232,240,0.8)" :
+          v >= 3 ? "rgba(59,130,246,0.85)" :
+          "rgba(99,179,237,0.85)"
+        ),
+        borderColor: values.map(v =>
+          v === 0 ? "#cbd5e0" :
+          v >= 3 ? "#2563eb" :
+          "#63b3ed"
+        ),
+        borderWidth: 2,
+        borderRadius: 8,
+        borderSkipped: false,
       }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
             label: ctx => ` ${ctx.raw} booking`,
-            title: ctx => new Date(data[ctx[0].dataIndex].tanggal).toLocaleDateString("id-ID", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
+            title: ctx => {
+              const raw = String(data[ctx[0].dataIndex].tanggal).slice(0, 10);
+              const [year, month, day] = raw.split("-").map(Number);
+
+              return new Date(year, month - 1, day).toLocaleDateString("id-ID", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric"
+              });
+            }
           }
         }
       },
       scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45 } },
-        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: "rgba(0,0,0,0.05)" } }
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 }, maxRotation: 45 }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, font: { size: 11 } },
+          grid: { color: "rgba(0,0,0,0.05)" }
+        }
       }
     }
   });
 }
 
+// ==================== RENDER TABLE ====================
 function renderTable(data) {
-  const body     = document.getElementById("statsTableBody");
-  const today    = new Date().toISOString().slice(0, 10);
-  const total    = data.reduce((s, d) => s + Number(d.total_booking), 0);
+  const body = document.getElementById("statsTableBody");
+
+  // Gunakan tanggal lokal agar tidak bergeser karena UTC
+  const today = formatLocalDate(new Date());
+
+  const total = data.reduce((s, d) => s + Number(d.total_booking), 0);
   const totalJam = data.reduce((s, d) => s + Number(d.total_jam || 0), 0);
 
-  document.getElementById("badgeTabel").textContent = `Total: ${total} booking | ${totalJam} jam`;
+  document.getElementById("badgeTabel").textContent =
+    `Total: ${total} booking | ${totalJam} jam`;
 
   if (!data.length) {
     body.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px">Tidak ada data</td></tr>`;
     return;
   }
 
-  const hariMap = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+  const hariMap = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
   body.innerHTML = [...data].reverse().map((d, i) => {
-    const tgl     = new Date(d.tanggal);
-    const isToday = d.tanggal.slice(0,10) === today;
-    const n       = Number(d.total_booking);
+    const rawDate = String(d.tanggal).slice(0, 10);
+    const [year, month, day] = rawDate.split("-").map(Number);
+    const tgl = new Date(year, month - 1, day);
+
+    const isToday = rawDate === today;
+    const n = Number(d.total_booking);
 
     const statusBadge = isToday
       ? `<span class="status-badge status-active">Hari ini</span>`
@@ -592,10 +737,14 @@ function renderTable(data) {
     return `
       <tr ${isToday ? 'style="background:#eff6ff"' : ''}>
         <td>${i + 1}</td>
-        <td><b>${tgl.toLocaleDateString("id-ID", { day:"numeric", month:"long", year:"numeric" })}</b></td>
+        <td><b>${tgl.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric"
+        })}</b></td>
         <td>${hariMap[tgl.getDay()]}</td>
         <td><b>${n}</b></td>
-        <td>${d.total_jam || 0} jam</td>
+        <td>${Number(d.total_jam || 0)} jam</td>
         <td>${statusBadge}</td>
       </tr>
     `;
@@ -610,40 +759,56 @@ async function manual(id, act) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ meja_id: id, action: act })
     });
+
     const d = await r.json();
+
     if (r.ok) toast(d.message, "success");
     else toast("Gagal kontrol", "error");
+
     loadStatusMeja();
-  } catch { toast("Gagal kontrol", "error"); }
+  } catch {
+    toast("Gagal kontrol", "error");
+  }
 }
 
 // ==================== GLOBAL CONTROL ====================
 async function globalControl(act) {
   if (!adminToken) return toast("Session expired", "error");
+
   try {
     const r = await adminFetch("/api/lampu/control", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: act })
     });
+
     const d = await r.json();
+
     if (r.ok) toast(d.message, "success");
     else toast("Gagal global control", "error");
+
     loadStatusMeja();
-  } catch { toast("Gagal", "error"); }
+  } catch {
+    toast("Gagal", "error");
+  }
 }
 
 // ==================== RESET ====================
 async function resetMeja() {
   if (!confirm("Reset semua meja? Semua booking akan ditandai selesai.")) return;
   if (!adminToken) return toast("Session expired, silakan login ulang", "error");
+
   try {
     const r = await adminFetch("/api/reset-meja", { method: "POST" });
     const d = await r.json();
+
     if (r.ok) toast("Reset berhasil!", "success");
-    else toast("Gagal reset", "error");
+    else toast(d.error || "Gagal reset", "error");
+
     loadAll();
-  } catch { toast("Gagal reset", "error"); }
+  } catch {
+    toast("Gagal reset", "error");
+  }
 }
 </script>
 </body>

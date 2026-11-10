@@ -496,7 +496,7 @@ async function simpanPDF(kode, totalHarga, nama, meja, tanggal, jamMulai, jamSel
     doc.text("Genzyeeeh Billiard", W / 2, y, { align: "center" });
     y += 6;
     doc.setFontSize(9);
-    doc.setFont("courier", "normal");
+    doc.setFont("couri er", "normal");
     doc.text("Bukti Booking Resmi", W / 2, y, { align: "center" });
     y += 5;
     doc.setLineDash([1, 1]);
