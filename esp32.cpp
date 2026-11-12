@@ -5,338 +5,350 @@
 // ======================================================
 // WIFI
 // ======================================================
+
 WiFiMulti wifiMulti;
 
-const char* WIFI_RUMAH_SSID = "NAMA_WIFI_RUMAH";
-const char* WIFI_RUMAH_PASS = "PASSWORD_WIFI_RUMAH";
+// Ganti dengan WiFi yang digunakan ESP32
+const char* WIFI_1_SSID     = "NAMA_WIFI_RUMAH";
+const char* WIFI_1_PASSWORD = "PASSWORD_WIFI_RUMAH";
 
-const char* WIFI_HOTSPOT_SSID = "NAMA_HOTSPOT_HP";
-const char* WIFI_HOTSPOT_PASS = "PASSWORD_HOTSPOT_HP";
+const char* WIFI_2_SSID     = "NAMA_HOTSPOT";
+const char* WIFI_2_PASSWORD = "PASSWORD_HOTSPOT";
 
 // ======================================================
 // SERVER
 // ======================================================
 
-// Ganti dengan IP laptop/PC yang menjalankan server.
-// Contoh: http://192.168.1.10:3000
-// Jangan menggunakan localhost.
-String serverUrl = "http://192.168.1.10:3000";
+const String serverUrl = "http://192.168.1.13:3000";
 
-// Harus sama dengan ESP_API_KEY di file .env.
-// Jika ESP_API_KEY kosong di server, biarkan kosong di sini.
-const char* espKey = "ISI_API_KEY_YANG_SAMA";
+// WAJIB sama persis dengan ESP_API_KEY di file .env server.js
+const String espKey = "ISI_DENGAN_API_KEY_YANG_SAMA";
 
 // ======================================================
-// PIN
+// PIN ESP32
 // ======================================================
+
 #define RELAY1 18
 #define RELAY2 19
 #define SENSOR1 34
 
-// Relay aktif LOW.
-#define RELAY_ON LOW
+// Relay aktif LOW
+#define RELAY_ON  LOW
 #define RELAY_OFF HIGH
 
-// Sesuaikan dengan modul sensor getar.
-// Jika sensor menghasilkan HIGH saat bergetar,
-// gunakan HIGH. Jika menghasilkan LOW, ubah ke LOW.
+// Sensor getaran aktif HIGH
 #define SENSOR_ACTIVE HIGH
 
 // ======================================================
 // INTERVAL
 // ======================================================
+
 const unsigned long SERVER_INTERVAL = 2000;
 const unsigned long WIFI_INTERVAL = 5000;
 
-const unsigned long SHAKE_DEBOUNCE_MS = 500;
-const unsigned long SHAKE_COOLDOWN_MS = 5000;
+const unsigned long SENSOR_DEBOUNCE = 500;
+const unsigned long SENSOR_COOLDOWN = 5000;
 
 // ======================================================
-// TIMER
+// VARIABEL
 // ======================================================
+
 unsigned long lastServerCheck = 0;
 unsigned long lastWifiCheck = 0;
+unsigned long lastShakeSent = 0;
 
-unsigned long lastShakeTime1 = 0;
-unsigned long lastSendShake1 = 0;
+int lastSensorReading = LOW;
+int stableSensorState = LOW;
 
-// ======================================================
-// STATUS
-// ======================================================
-bool lampu1 = false;
-bool lampu2 = false;
-
-bool lastSensorState = false;
+unsigned long lastDebounceTime = 0;
 
 // ======================================================
-// RELAY
+// HEADER AUTENTIKASI
 // ======================================================
-void setRelay(uint8_t relayPin, bool on) {
-    digitalWrite(
-        relayPin,
-        on ? RELAY_ON : RELAY_OFF
-    );
-}
 
-void setLampu1(bool on) {
-    lampu1 = on;
-    setRelay(RELAY1, on);
-
-    Serial.print("LAMPU MEJA 1: ");
-    Serial.println(on ? "ON" : "OFF");
-}
-
-void setLampu2(bool on) {
-    lampu2 = on;
-    setRelay(RELAY2, on);
-
-    Serial.print("LAMPU MEJA 2: ");
-    Serial.println(on ? "ON" : "OFF");
-}
-
-// ======================================================
-// WIFI
-// ======================================================
-void setupWifi() {
-    WiFi.mode(WIFI_STA);
-
-    wifiMulti.addAP(
-        WIFI_RUMAH_SSID,
-        WIFI_RUMAH_PASS
-    );
-
-    wifiMulti.addAP(
-        WIFI_HOTSPOT_SSID,
-        WIFI_HOTSPOT_PASS
-    );
-
-    Serial.println();
-    Serial.println("Menghubungkan WiFi...");
-
-    unsigned long start = millis();
-
-    while (
-        wifiMulti.run() != WL_CONNECTED &&
-        millis() - start < 20000
-    ) {
-        Serial.print(".");
-        delay(500);
-    }
-
-    Serial.println();
-
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("WiFi terhubung.");
-        Serial.print("SSID: ");
-        Serial.println(WiFi.SSID());
-
-        Serial.print("IP ESP32: ");
-        Serial.println(WiFi.localIP());
-    } else {
-        Serial.println("WiFi belum terhubung.");
-    }
-}
-
-// ======================================================
-// CEK WIFI
-// ======================================================
-void checkWifi() {
-    if (millis() - lastWifiCheck < WIFI_INTERVAL) {
-        return;
-    }
-
-    lastWifiCheck = millis();
-
-    if (wifiMulti.run() != WL_CONNECTED) {
-        Serial.println("WiFi terputus. Mencoba koneksi ulang...");
-    }
-}
-
-// ======================================================
-// HEADER API
-// ======================================================
 void addApiHeaders(HTTPClient &http) {
-    http.addHeader("Content-Type", "application/json");
-
-    if (strlen(espKey) > 0) {
-        http.addHeader("X-ESP-KEY", espKey);
-    }
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-ESP-KEY", espKey);
 }
 
 // ======================================================
-// KIRIM SENSOR GETAR
+// KONTROL RELAY
 // ======================================================
+
+void relayMeja1(bool status) {
+  digitalWrite(RELAY1, status ? RELAY_ON : RELAY_OFF);
+
+  Serial.print("Relay Meja 1: ");
+  Serial.println(status ? "ON" : "OFF");
+}
+
+void relayMeja2(bool status) {
+  digitalWrite(RELAY2, status ? RELAY_ON : RELAY_OFF);
+
+  Serial.print("Relay Meja 2: ");
+  Serial.println(status ? "ON" : "OFF");
+}
+
+// ======================================================
+// KONEKSI WIFI
+// ======================================================
+
+void connectWiFi() {
+  Serial.println();
+  Serial.println("Memeriksa koneksi WiFi...");
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi terhubung: ");
+    Serial.println(WiFi.SSID());
+    return;
+  }
+
+  if (wifiMulti.run(10000) == WL_CONNECTED) {
+    Serial.println("WiFi berhasil terhubung!");
+
+    Serial.print("SSID: ");
+    Serial.println(WiFi.SSID());
+
+    Serial.print("IP ESP32: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("WiFi belum terhubung.");
+  }
+}
+
+// ======================================================
+// KIRIM DATA GETARAN MEJA 1
+// ======================================================
+
 void sendShake() {
-    if (WiFi.status() != WL_CONNECTED) {
-        return;
-    }
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Getaran tidak dikirim: WiFi terputus.");
+    return;
+  }
 
-    HTTPClient http;
+  if (espKey.length() == 0 ||
+      espKey == "ISI_DENGAN_API_KEY_YANG_SAMA") {
+    Serial.println("ERROR: API KEY ESP32 belum diisi!");
+    return;
+  }
 
-    String url = serverUrl + "/api/shake";
+  HTTPClient http;
+  WiFiClient client;
 
-    http.begin(url);
-    addApiHeaders(http);
+  String url = serverUrl + "/api/shake";
 
-    String payload = "{\"meja_id\":1}";
+  http.setTimeout(3000);
+  http.begin(client, url);
 
-    int httpCode = http.POST(payload);
+  addApiHeaders(http);
 
-    if (httpCode > 0) {
-        Serial.print("SHAKE RESPONSE: ");
-        Serial.println(httpCode);
+  String payload = "{\"meja_id\":1}";
 
-        String response = http.getString();
-        Serial.println(response);
-    } else {
-        Serial.print("SHAKE ERROR: ");
-        Serial.println(http.errorToString(httpCode));
-    }
+  Serial.println();
+  Serial.println("Mengirim laporan getaran Meja 1...");
 
-    http.end();
+  int httpCode = http.POST(payload);
+
+  Serial.print("HTTP Response Getaran: ");
+  Serial.println(httpCode);
+
+  if (httpCode > 0) {
+    String response = http.getString();
+
+    Serial.print("Server Response: ");
+    Serial.println(response);
+  } else {
+    Serial.print("Gagal mengirim getaran: ");
+    Serial.println(http.errorToString(httpCode));
+  }
+
+  http.end();
 }
 
 // ======================================================
-// BACA SENSOR
+// MEMERIKSA PERINTAH SERVER
 // ======================================================
-void checkSensor() {
-    bool currentState =
-        digitalRead(SENSOR1) == SENSOR_ACTIVE;
 
-    unsigned long now = millis();
+void checkServerCommand(int meja) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
 
-    // Deteksi perubahan dari tidak aktif ke aktif.
-    if (currentState && !lastSensorState) {
-        if (
-            now - lastShakeTime1 >= SHAKE_DEBOUNCE_MS &&
-            now - lastSendShake1 >= SHAKE_COOLDOWN_MS
-        ) {
-            lastShakeTime1 = now;
-            lastSendShake1 = now;
+  if (espKey.length() == 0 ||
+      espKey == "ISI_DENGAN_API_KEY_YANG_SAMA") {
+    Serial.println("ERROR: API KEY ESP32 belum diisi!");
+    return;
+  }
 
-            Serial.println("GETARAN MEJA 1 TERDETEKSI");
+  HTTPClient http;
+  WiFiClient client;
 
-            // Sensor hanya mengirim laporan.
-            // Sensor tidak mengontrol relay secara langsung.
-            sendShake();
-        }
+  String url = serverUrl + "/api/esp-command?meja=" + String(meja);
+
+  http.setTimeout(3000);
+  http.begin(client, url);
+
+  addApiHeaders(http);
+
+  int httpCode = http.GET();
+
+  Serial.print("HTTP Command Meja ");
+  Serial.print(meja);
+  Serial.print(": ");
+  Serial.println(httpCode);
+
+  if (httpCode > 0) {
+    String response = http.getString();
+
+    response.trim();
+    response.toUpperCase();
+
+    Serial.print("Perintah Meja ");
+    Serial.print(meja);
+    Serial.print(": ");
+    Serial.println(response);
+
+    // ------------------------------------------
+    // PERINTAH MEJA 1
+    // ------------------------------------------
+
+    if (meja == 1) {
+      if (response == "ON1") {
+        relayMeja1(true);
+      }
+      else if (response == "OFF1") {
+        relayMeja1(false);
+      }
     }
 
-    lastSensorState = currentState;
+    // ------------------------------------------
+    // PERINTAH MEJA 2
+    // ------------------------------------------
+
+    else if (meja == 2) {
+      if (response == "ON2") {
+        relayMeja2(true);
+      }
+      else if (response == "OFF2") {
+        relayMeja2(false);
+      }
+    }
+  } else {
+    Serial.print("Gagal mengambil perintah: ");
+    Serial.println(http.errorToString(httpCode));
+  }
+
+  http.end();
 }
 
 // ======================================================
-// AMBIL PERINTAH DARI SERVER
+// MEMERIKSA SENSOR GETARAN
 // ======================================================
-void checkServerCommand(uint8_t meja) {
-    if (WiFi.status() != WL_CONNECTED) {
-        return;
-    }
 
-    HTTPClient http;
+void checkVibrationSensor() {
+  int reading = digitalRead(SENSOR1);
 
-    String url =
-        serverUrl +
-        "/api/esp-command?meja=" +
-        String(meja);
+  if (reading != lastSensorReading) {
+    lastDebounceTime = millis();
+    lastSensorReading = reading;
+  }
 
-    http.begin(url);
+  if ((millis() - lastDebounceTime) > SENSOR_DEBOUNCE) {
+    if (reading != stableSensorState) {
+      stableSensorState = reading;
 
-    if (strlen(espKey) > 0) {
-        http.addHeader("X-ESP-KEY", espKey);
-    }
+      // Hanya kirim laporan saat sensor mendeteksi getaran
+      if (stableSensorState == SENSOR_ACTIVE) {
+        unsigned long now = millis();
 
-    int httpCode = http.GET();
+        if (now - lastShakeSent >= SENSOR_COOLDOWN) {
+          Serial.println();
+          Serial.println("GETARAN MEJA 1 TERDETEKSI!");
 
-    if (httpCode == HTTP_CODE_OK) {
-        String command = http.getString();
+          sendShake();
 
-        command.trim();
-
-        Serial.print("COMMAND MEJA ");
-        Serial.print(meja);
-        Serial.print(": ");
-        Serial.println(command);
-
-        if (meja == 1) {
-            if (command == "ON1") {
-                setLampu1(true);
-            } else if (command == "OFF1") {
-                setLampu1(false);
-            }
+          lastShakeSent = now;
         }
-
-        if (meja == 2) {
-            if (command == "ON2") {
-                setLampu2(true);
-            } else if (command == "OFF2") {
-                setLampu2(false);
-            }
-        }
-    } else if (httpCode > 0) {
-        Serial.print("SERVER RESPONSE: ");
-        Serial.println(httpCode);
-    } else {
-        Serial.print("SERVER ERROR: ");
-        Serial.println(http.errorToString(httpCode));
+      }
     }
-
-    http.end();
-}
-
-// ======================================================
-// POLLING SERVER
-// ======================================================
-void pollServer() {
-    if (millis() - lastServerCheck < SERVER_INTERVAL) {
-        return;
-    }
-
-    lastServerCheck = millis();
-
-    if (WiFi.status() != WL_CONNECTED) {
-        return;
-    }
-
-    // Selalu cek kedua meja.
-    checkServerCommand(1);
-    checkServerCommand(2);
+  }
 }
 
 // ======================================================
 // SETUP
 // ======================================================
+
 void setup() {
-    Serial.begin(115200);
+  Serial.begin(115200);
 
-    // Relay
-    pinMode(RELAY1, OUTPUT);
-    pinMode(RELAY2, OUTPUT);
+  Serial.println();
+  Serial.println("==================================");
+  Serial.println(" SMART BILLIARD ESP32");
+  Serial.println("==================================");
 
-    // Pastikan lampu mati saat ESP32 mulai.
-    setLampu1(false);
-    setLampu2(false);
+  // Konfigurasi relay
+  pinMode(RELAY1, OUTPUT);
+  pinMode(RELAY2, OUTPUT);
 
-    // Sensor GPIO34 hanya input.
-    pinMode(SENSOR1, INPUT);
+  // Pastikan lampu mati saat ESP32 mulai
+  relayMeja1(false);
+  relayMeja2(false);
 
-    Serial.println();
-    Serial.println("================================");
-    Serial.println(" SMART BILLIARD ESP32");
-    Serial.println("================================");
+  // Konfigurasi sensor
+  pinMode(SENSOR1, INPUT);
 
-    setupWifi();
+  lastSensorReading = digitalRead(SENSOR1);
+  stableSensorState = lastSensorReading;
+
+  // Tambahkan jaringan WiFi
+  wifiMulti.addAP(WIFI_1_SSID, WIFI_1_PASSWORD);
+  wifiMulti.addAP(WIFI_2_SSID, WIFI_2_PASSWORD);
+
+  // Hubungkan WiFi
+  connectWiFi();
+
+  Serial.println();
+  Serial.println("ESP32 siap menjalankan sistem.");
 }
 
 // ======================================================
 // LOOP
 // ======================================================
+
 void loop() {
-    checkWifi();
+  unsigned long now = millis();
 
-    checkSensor();
+  // ------------------------------------------
+  // PERIKSA WIFI
+  // ------------------------------------------
 
-    pollServer();
+  if (now - lastWifiCheck >= WIFI_INTERVAL) {
+    lastWifiCheck = now;
 
-    delay(10);
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WiFi terputus, mencoba menghubungkan kembali...");
+      connectWiFi();
+    }
+  }
+
+  // ------------------------------------------
+  // BACA SENSOR GETARAN
+  // ------------------------------------------
+
+  if (WiFi.status() == WL_CONNECTED) {
+    checkVibrationSensor();
+  }
+
+  // ------------------------------------------
+  // AMBIL PERINTAH SERVER
+  // ------------------------------------------
+
+  if (now - lastServerCheck >= SERVER_INTERVAL) {
+    lastServerCheck = now;
+
+    if (WiFi.status() == WL_CONNECTED) {
+      checkServerCommand(1);
+      checkServerCommand(2);
+    }
+  }
 }

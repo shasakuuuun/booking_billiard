@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 // ======================================================
 // KONFIGURASI
 // ======================================================
+
 const TIME_ZONE = "Asia/Jakarta";
 const SESSION_HOURS = 12;
 const MAX_DURASI_JAM = 5;
@@ -19,7 +20,7 @@ const JAM_BUKA = 9 * 60;
 const JAM_TUTUP = 23 * 60;
 const SHAKE_TIMEOUT_MS = 25 * 1000;
 
-const ESP_API_KEY = process.env.ESP_API_KEY || "";
+const ESP_API_KEY = process.env.ESP_API_KEY || "d86c1beef7af05ba8ac6d201574fa5e6e07cd772f7553216cd878c5f63cc126d";
 
 const ADMIN = {
     username: process.env.ADMIN_USERNAME || "admin",
@@ -38,6 +39,7 @@ const db = new Pool({
 // ======================================================
 // WAKTU WIB
 // ======================================================
+
 function getWibParts() {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: TIME_ZONE,
@@ -116,6 +118,7 @@ function isValidDateRange(from, to) {
 // ======================================================
 // LOG
 // ======================================================
+
 function log(message) {
     console.log(`[${new Date().toISOString()}] ${message}`);
 }
@@ -151,6 +154,7 @@ function csvCell(value) {
 // ======================================================
 // MIDDLEWARE
 // ======================================================
+
 app.disable("x-powered-by");
 
 app.use((req, res, next) => {
@@ -181,6 +185,7 @@ process.on("unhandledRejection", err => {
 // ======================================================
 // KEAMANAN
 // ======================================================
+
 function safeEqual(a, b) {
     const ha = crypto.createHash("sha256")
         .update(String(a))
@@ -202,11 +207,16 @@ if (
 }
 
 if (!ESP_API_KEY) {
-    log("PERINGATAN: ESP_API_KEY belum diatur.");
+    log("PERINGATAN: ESP_API_KEY belum diatur. Endpoint ESP32 akan menolak request (HTTP 503).");
 }
 
 function requireEsp(req, res, next) {
-    if (!ESP_API_KEY) return next();
+    // Fail-closed: jangan izinkan endpoint ESP32 jika kunci belum dikonfigurasi.
+    if (!ESP_API_KEY) {
+        return res.status(503).json({
+            error: "ESP_API_KEY belum dikonfigurasi di file .env."
+        });
+    }
 
     const key = req.headers["x-esp-key"];
 
@@ -225,6 +235,7 @@ function requireEsp(req, res, next) {
 // ======================================================
 // RATE LIMITER
 // ======================================================
+
 function rateLimit({ windowMs, max, message }) {
     const hits = new Map();
 
@@ -289,6 +300,7 @@ const bookingLimiter = rateLimit({
 // ======================================================
 // TOKEN DAN KODE AKTIVASI
 // ======================================================
+
 function makeToken() {
     return crypto.randomBytes(32).toString("hex");
 }
@@ -310,6 +322,7 @@ function makeKodeAktivasi() {
 // ======================================================
 // DATABASE INITIALIZATION
 // ======================================================
+
 async function initializeDatabase() {
     try {
         await db.query("SELECT NOW()");
@@ -394,6 +407,7 @@ async function initializeDatabase() {
 // ======================================================
 // SESSION ADMIN
 // ======================================================
+
 function getToken(req) {
     const raw = req.headers["authorization"];
 
@@ -454,14 +468,18 @@ async function requireAdmin(req, res, next) {
 // ======================================================
 // STATE ADMIN
 // ======================================================
+
+// null = otomatis, true = paksa ON, false = paksa OFF.
+// Nilai false tetap dianggap override agar cron tidak menyalakan lampu kembali.
 let manualMode = {
-    1: false,
-    2: false
+    1: null,
+    2: null
 };
 
 // ======================================================
 // LOGIN ADMIN
 // ======================================================
+
 app.post("/api/admin/login", loginLimiter, async (req, res) => {
     try {
         const { username, password } = req.body || {};
@@ -514,6 +532,7 @@ app.post("/api/admin/login", loginLimiter, async (req, res) => {
 // ======================================================
 // VERIFY TOKEN
 // ======================================================
+
 app.post("/api/admin/verify", async (req, res) => {
     try {
         const { token } = req.body || {};
@@ -547,6 +566,7 @@ app.post("/api/admin/verify", async (req, res) => {
 // ======================================================
 // LOGOUT
 // ======================================================
+
 app.post("/api/admin/logout", requireAdmin, async (req, res) => {
     try {
         await db.query(
@@ -569,6 +589,7 @@ app.post("/api/admin/logout", requireAdmin, async (req, res) => {
 // ======================================================
 // BOOKING PUBLIK
 // ======================================================
+
 app.get("/api/bookings", async (req, res) => {
     try {
         const result = await db.query(
@@ -593,6 +614,7 @@ app.get("/api/bookings", async (req, res) => {
 // ======================================================
 // BOOKING ADMIN
 // ======================================================
+
 app.get("/api/admin/bookings", requireAdmin, async (req, res) => {
     try {
         const today = getWibDate();
@@ -628,6 +650,7 @@ app.get("/api/admin/bookings", requireAdmin, async (req, res) => {
 // ======================================================
 // TAMBAH BOOKING
 // ======================================================
+
 app.post("/api/booking", bookingLimiter, async (req, res) => {
     let client;
 
@@ -695,6 +718,13 @@ app.post("/api/booking", bookingLimiter, async (req, res) => {
         if (menitSelesai > JAM_TUTUP) {
             return res.status(400).json({
                 error: "Booking harus selesai paling lambat pukul 23:00 WIB."
+            });
+        }
+
+        // Tolak jam booking yang sudah lewat.
+        if (jamMulai < getWibTime()) {
+            return res.status(400).json({
+                error: "Jam booking sudah lewat. Silakan pilih jam mulai berikutnya."
             });
         }
 
@@ -828,6 +858,7 @@ app.post("/api/booking", bookingLimiter, async (req, res) => {
 // ======================================================
 // AKTIVASI KODE
 // ======================================================
+
 app.post("/api/aktivasi", aktivasiLimiter, async (req, res) => {
     let client;
 
@@ -903,7 +934,7 @@ app.post("/api/aktivasi", aktivasiLimiter, async (req, res) => {
 
         await client.query("COMMIT");
 
-        manualMode[meja] = false;
+        manualMode[meja] = null;
 
         log(`AKTIVASI -> ${kode} | Meja ${meja}`);
 
@@ -941,6 +972,7 @@ app.post("/api/aktivasi", aktivasiLimiter, async (req, res) => {
 // ======================================================
 // STATUS LAMPU
 // ======================================================
+
 app.get("/api/lampu/status", async (req, res) => {
     try {
         const result = await db.query(
@@ -960,6 +992,7 @@ app.get("/api/lampu/status", async (req, res) => {
 // ======================================================
 // STATUS MEJA
 // ======================================================
+
 app.get("/api/status-meja", async (req, res) => {
     try {
         const today = getWibDate();
@@ -995,22 +1028,24 @@ app.get("/api/status-meja", async (req, res) => {
     }
 });
 
-
 // ======================================================
 // RESET MEJA
 // Mengakhiri seluruh booking hari ini dan mematikan lampu.
 // ======================================================
-app.post("/api/reset-meja", requireAdmin, async (req, res) => {
-    try {
-        await db.query("BEGIN");
 
-        // Matikan seluruh lampu melalui PostgreSQL.
-        await db.query(
+app.post("/api/reset-meja", requireAdmin, async (req, res) => {
+    let client;
+
+    try {
+        // Semua query transaksi harus memakai satu koneksi PostgreSQL.
+        client = await db.connect();
+        await client.query("BEGIN");
+
+        await client.query(
             "UPDATE meja_billiard SET status_lampu = FALSE"
         );
 
-        // Selesaikan seluruh booking hari ini.
-        await db.query(
+        await client.query(
             `UPDATE bookings
              SET status = 'completed'
              WHERE tanggal = $1::date
@@ -1018,16 +1053,9 @@ app.post("/api/reset-meja", requireAdmin, async (req, res) => {
             [getWibDate()]
         );
 
-        await db.query("COMMIT");
+        await client.query("COMMIT");
 
-        // Nonaktifkan mode manual.
-        manualMode = {
-            1: false,
-            2: false
-        };
-
-        // Tidak perlu pushCommand().
-        // ESP32 membaca status lampu langsung dari database.
+        manualMode = { 1: null, 2: null };
 
         await saveIotLog(
             "ADMIN",
@@ -1042,24 +1070,27 @@ app.post("/api/reset-meja", requireAdmin, async (req, res) => {
             success: true,
             message: "Reset berhasil. Semua booking hari ini diselesaikan dan lampu dimatikan."
         });
-
     } catch (err) {
-        try {
-            await db.query("ROLLBACK");
-        } catch (_) {}
+        if (client) {
+            try {
+                await client.query("ROLLBACK");
+            } catch (_) {}
+        }
 
         log("Reset Error: " + err.message);
 
         return res.status(500).json({
             error: "Terjadi kesalahan pada server."
         });
+    } finally {
+        if (client) client.release();
     }
 });
-
 
 // ======================================================
 // GLOBAL CONTROL
 // ======================================================
+
 app.post("/api/lampu/control", requireAdmin, async (req, res) => {
     try {
         const action = req.body?.action;
@@ -1105,6 +1136,7 @@ app.post("/api/lampu/control", requireAdmin, async (req, res) => {
 // ======================================================
 // MANUAL CONTROL
 // ======================================================
+
 app.post("/api/manual-control", requireAdmin, async (req, res) => {
     try {
         const meja = Number(req.body?.meja_id);
@@ -1159,6 +1191,7 @@ app.post("/api/manual-control", requireAdmin, async (req, res) => {
 // Tidak pernah menyalakan lampu.
 // Tidak dapat membatalkan timeout.
 // ======================================================
+
 app.post("/api/shake", requireEsp, async (req, res) => {
     let client;
 
@@ -1174,7 +1207,7 @@ app.post("/api/shake", requireEsp, async (req, res) => {
         client = await db.connect();
         await client.query("BEGIN");
 
-        const today = getWibDate();
+                const today = getWibDate();
         const now = getWibTime();
 
         const result = await client.query(
@@ -1201,8 +1234,7 @@ app.post("/api/shake", requireEsp, async (req, res) => {
 
         const booking = result.rows[0];
 
-        // Jika pelanggan sudah aktivasi, sensor tidak lagi
-        // mengubah timer.
+        // Jika pelanggan sudah aktivasi, sensor tidak lagi mengubah timer.
         if (booking.activated_at) {
             await client.query("COMMIT");
 
@@ -1212,8 +1244,7 @@ app.post("/api/shake", requireEsp, async (req, res) => {
             });
         }
 
-        // Jika sudah timeout, getaran tidak boleh
-        // menghidupkan lampu atau membuka timeout.
+        // Jika sudah timeout, getaran tidak boleh menyalakan lampu.
         if (booking.waiting_timeout_at) {
             await client.query("COMMIT");
 
@@ -1239,7 +1270,6 @@ app.post("/api/shake", requireEsp, async (req, res) => {
             });
         }
 
-        // Reset timer menunggu 25 detik.
         await client.query(
             `UPDATE bookings
              SET waiting_started_at=NOW()
@@ -1284,8 +1314,8 @@ app.post("/api/shake", requireEsp, async (req, res) => {
 // ======================================================
 // ESP32 COMMAND
 // PostgreSQL menjadi sumber kebenaran status lampu.
-// Setiap polling selalu mengirim ON1/OFF1/ON2/OFF2.
 // ======================================================
+
 app.get("/api/esp-command", requireEsp, async (req, res) => {
     try {
         const meja = Number(req.query.meja);
@@ -1314,25 +1344,20 @@ app.get("/api/esp-command", requireEsp, async (req, res) => {
         return res.type("text/plain").send(command);
     } catch (err) {
         log("ESP COMMAND: " + err.message);
-
         res.status(500).send("");
     }
 });
 
 // ======================================================
 // CRON BOOKING
-// Booking mulai: lampu otomatis ON.
-// Booking selesai: lampu otomatis OFF.
-// Meja 1: mulai timer menunggu 25 detik.
-// Meja 2: tidak menggunakan sensor.
 // ======================================================
+
 let cronBookingBusy = false;
 
 cron.schedule("* * * * * *", async () => {
     if (cronBookingBusy) return;
 
     cronBookingBusy = true;
-
     let client;
 
     try {
@@ -1355,6 +1380,7 @@ cron.schedule("* * * * * *", async () => {
             );
 
             let bookingAktif = null;
+            let bookingBaruSelesai = false;
 
             for (const booking of result.rows) {
                 const mulai = hhmm(booking.jam_mulai);
@@ -1364,10 +1390,11 @@ cron.schedule("* * * * * *", async () => {
                     await client.query(
                         `UPDATE bookings
                          SET status='completed'
-                         WHERE id=$1`,
+                         WHERE id=$1 AND status != 'completed'`,
                         [booking.id]
                     );
 
+                    bookingBaruSelesai = true;
                     log(`BOOKING COMPLETED -> #${booking.id}`);
                     continue;
                 }
@@ -1378,24 +1405,48 @@ cron.schedule("* * * * * *", async () => {
                 }
             }
 
-            if (!bookingAktif) {
-                const lamp = await client.query(
-                    `SELECT status_lampu
-                     FROM meja_billiard
-                     WHERE id=$1
-                     FOR UPDATE`,
-                    [mejaId]
-                );
+            const lampResult = await client.query(
+                `SELECT status_lampu
+                 FROM meja_billiard
+                 WHERE id=$1
+                 FOR UPDATE`,
+                [mejaId]
+            );
 
-                if (lamp.rows.length && lamp.rows[0].status_lampu) {
+            if (!lampResult.rows.length) continue;
+
+            const lampuSebelumnya =
+                lampResult.rows[0].status_lampu === true;
+
+            if (!bookingAktif) {
+                if (
+                    bookingBaruSelesai ||
+                    manualMode[mejaId] === null
+                ) {
+                    if (lampuSebelumnya) {
+                        await client.query(
+                            `UPDATE meja_billiard
+                             SET status_lampu=FALSE
+                             WHERE id=$1`,
+                            [mejaId]
+                        );
+
+                        log(`AUTO OFF -> Meja ${mejaId}`);
+                    }
+
+                    if (bookingBaruSelesai) {
+                        manualMode[mejaId] = null;
+                    }
+                } else if (
+                    manualMode[mejaId] === true &&
+                    !lampuSebelumnya
+                ) {
                     await client.query(
                         `UPDATE meja_billiard
-                         SET status_lampu=FALSE
+                         SET status_lampu=TRUE
                          WHERE id=$1`,
                         [mejaId]
                     );
-
-                    log(`AUTO OFF -> Meja ${mejaId}`);
                 }
 
                 continue;
@@ -1403,29 +1454,23 @@ cron.schedule("* * * * * *", async () => {
 
             const bookingId = bookingAktif.id;
 
-            // Meja 1: buat timer awal jika belum pernah dibuat.
             if (mejaId === 1) {
                 await client.query(
                     `UPDATE bookings
                      SET status='active',
-                         waiting_started_at=
-                            COALESCE(waiting_started_at, NOW())
+                         waiting_started_at=COALESCE(waiting_started_at, NOW())
                      WHERE id=$1`,
                     [bookingId]
                 );
             } else {
                 await client.query(
-                    `UPDATE bookings
-                     SET status='active'
-                     WHERE id=$1`,
+                    `UPDATE bookings SET status='active' WHERE id=$1`,
                     [bookingId]
                 );
             }
 
             let shouldLampOn = true;
 
-            // Meja 1 tetap mati jika timeout sudah terjadi
-            // dan pelanggan belum melakukan aktivasi.
             if (
                 mejaId === 1 &&
                 bookingAktif.waiting_timeout_at &&
@@ -1434,21 +1479,31 @@ cron.schedule("* * * * * *", async () => {
                 shouldLampOn = false;
             }
 
-            if (manualMode[mejaId]) {
-                continue;
+            if (manualMode[mejaId] !== null) {
+                shouldLampOn = manualMode[mejaId];
             }
 
-            await client.query(
-                `UPDATE meja_billiard
-                 SET status_lampu=$1
-                 WHERE id=$2`,
-                [shouldLampOn, mejaId]
-            );
+            if (lampuSebelumnya !== shouldLampOn) {
+                await client.query(
+                    `UPDATE meja_billiard
+                     SET status_lampu=$1
+                     WHERE id=$2`,
+                    [shouldLampOn, mejaId]
+                );
 
-            if (shouldLampOn && !bookingAktif.activated_at) {
-                // Lampu otomatis ON pada awal booking.
-                // Tidak mengubah waiting_started_at jika sudah ada.
-                log(`BOOKING AKTIF -> Meja ${mejaId}`);
+                log(
+                    `${shouldLampOn ? "AUTO ON" : "AUTO OFF"} -> Meja ${mejaId}`
+                );
+            }
+
+            if (
+                shouldLampOn &&
+                !lampuSebelumnya &&
+                !bookingAktif.activated_at
+            ) {
+                log(
+                    `BOOKING MULAI -> Meja ${mejaId} | Booking #${bookingId}`
+                );
             }
         }
 
@@ -1468,16 +1523,15 @@ cron.schedule("* * * * * *", async () => {
 });
 
 // ======================================================
-// CRON SENSOR TIMEOUT
-// HANYA MEJA 1
+// CRON SENSOR TIMEOUT - KHUSUS MEJA 1
 // ======================================================
+
 let sensorCronBusy = false;
 
 cron.schedule("* * * * * *", async () => {
     if (sensorCronBusy) return;
 
     sensorCronBusy = true;
-
     let client;
 
     try {
@@ -1529,9 +1583,7 @@ cron.schedule("* * * * * *", async () => {
 
         await client.query("COMMIT");
 
-        log(
-            `SENSOR TIMEOUT -> Meja 1 | Booking #${booking.id}`
-        );
+        log(`SENSOR TIMEOUT -> Meja 1 | Booking #${booking.id}`);
 
         await saveIotLog(
             "SENSOR",
@@ -1556,6 +1608,7 @@ cron.schedule("* * * * * *", async () => {
 // ======================================================
 // STATISTIK
 // ======================================================
+
 app.get("/api/statistik", async (req, res) => {
     try {
         const days = Math.min(
@@ -1595,6 +1648,7 @@ app.get("/api/statistik", async (req, res) => {
 // ======================================================
 // KONFIRMASI PEMBAYARAN
 // ======================================================
+
 app.post("/api/konfirmasi-bayar", requireAdmin, async (req, res) => {
     try {
         const bookingId = Number(req.body?.booking_id);
@@ -1644,6 +1698,7 @@ app.post("/api/konfirmasi-bayar", requireAdmin, async (req, res) => {
 // ======================================================
 // EXPORT CSV LOG IoT
 // ======================================================
+
 app.get("/api/admin/iot-export.csv", requireAdmin, async (req, res) => {
     try {
         const { from, to } = req.query;
@@ -1707,6 +1762,7 @@ app.get("/api/admin/iot-export.csv", requireAdmin, async (req, res) => {
 // ======================================================
 // EXPORT EXCEL
 // ======================================================
+
 app.get("/api/admin/laporan.xlsx", requireAdmin, async (req, res) => {
     try {
         const today = getWibDate();
@@ -1972,6 +2028,7 @@ app.get("/api/admin/laporan.xlsx", requireAdmin, async (req, res) => {
 // ======================================================
 // ERROR HANDLER
 // ======================================================
+
 app.use((err, req, res, next) => {
     if (err?.type === "entity.parse.failed") {
         return res.status(400).json({
@@ -1995,6 +2052,7 @@ app.use((err, req, res, next) => {
 // ======================================================
 // START SERVER
 // ======================================================
+
 async function startServer() {
     await initializeDatabase();
 
